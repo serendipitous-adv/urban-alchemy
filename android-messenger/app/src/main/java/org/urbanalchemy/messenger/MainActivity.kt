@@ -7,6 +7,7 @@ import android.content.Context
 import android.content.Intent
 import android.net.wifi.WifiManager
 import org.json.JSONObject
+import org.json.JSONArray
 import com.chaquo.python.android.AndroidPlatform
 import com.chaquo.python.Python
 import androidx.activity.ComponentActivity
@@ -52,6 +53,81 @@ class MainActivity : ComponentActivity() {
         if (!lock.isHeld) lock.acquire()
     }
 
+
+    private suspend fun syncLxmf(store: LocalStore): Int = withContext(Dispatchers.IO) {
+        if (!Python.isStarted()) Python.start(AndroidPlatform(applicationContext))
+        val module = Python.getInstance().getModule("transport_probe")
+        val runtime = JSONObject(
+            module.callAttr(
+                "start_runtime",
+                filesDir.resolve("reticulum").absolutePath,
+                "Urban Alchemy"
+            ).toString()
+        )
+        store.bindReticulumIdentity(
+            runtime.getString("reticulum_identity_hash"),
+            runtime.getString("reticulum_public_key"),
+            runtime.getString("destination")
+        )
+
+        var processed = 0
+        for (pending in store.pendingOutbound()) {
+            val result = JSONObject(
+                module.callAttr("send_message", pending.recipient, pending.text, pending.id).toString()
+            )
+            if (result.optBoolean("accepted")) {
+                store.updateOutbound(
+                    pending.id, "SUBMITTED",
+                    result.optString("lxmf_hash").takeIf { it.isNotBlank() && it != "null" }
+                )
+            } else {
+                val waiting = result.optString("status")
+                store.updateOutbound(
+                    pending.id,
+                    if (waiting == "WAITING_FOR_IDENTITY") "WAITING_FOR_IDENTITY" else "WAITING_FOR_ROUTE"
+                )
+            }
+            processed++
+        }
+
+        val events = JSONArray(module.callAttr("drain_events", 100).toString())
+        for (index in 0 until events.length()) {
+            val event = events.getJSONObject(index)
+            when (event.optString("type")) {
+                "inbound" -> {
+                    val source = event.optString("source")
+                    val hash = event.optString("message_hash")
+                    if (source.isNotBlank() && source != "null" && hash.isNotBlank() && hash != "null") {
+                        store.saveInbound(
+                            source, hash, event.optString("content"),
+                            event.optLong("timestamp", System.currentTimeMillis())
+                        )
+                        processed++
+                    }
+                }
+                "outbound_status" -> {
+                    val state = when (event.optString("state_name")) {
+                        "DELIVERED" -> "DELIVERED"
+                        "SENT" -> "SENT"
+                        "FAILED", "CANCELLED" -> "FAILED"
+                        "REJECTED" -> "REJECTED"
+                        "OUTBOUND", "SENDING" -> "SUBMITTED"
+                        else -> null
+                    }
+                    val clientId = event.optString("client_message_id")
+                    if (state != null && clientId.isNotBlank() && clientId != "null") {
+                        store.updateOutbound(
+                            clientId, state,
+                            event.optString("lxmf_hash").takeIf { it.isNotBlank() && it != "null" }
+                        )
+                        processed++
+                    }
+                }
+            }
+        }
+        processed
+    }
+
     override fun onDestroy() {
         try {
             reticulumMulticastLock?.let { if (it.isHeld) it.release() }
@@ -88,11 +164,24 @@ class MainActivity : ComponentActivity() {
                             onSend = { text ->
                                 if (selected.recipientAddress?.let { Regex("^[0-9a-f]{32}$").matches(it) } == true) {
                                     store.addQueuedMessage(selected.id, text)
+                                    messages = store.listMessages(selected.id)
+                                    conversations = store.listConversations()
+                                    transportStatus = "Message saved to the encrypted outbox. Submitting through LXMF..."
+                                    lifecycleScope.launch {
+                                        try {
+                                            syncLxmf(store)
+                                            messages = store.listMessages(selected.id)
+                                            conversations = store.listConversations()
+                                            transportStatus = "LXMF outbox checked. Delivery status reflects transport callbacks."
+                                        } catch (error: Exception) {
+                                            transportStatus = "Message remains safely queued: ${error.message ?: error.javaClass.simpleName}"
+                                        }
+                                    }
                                 } else {
                                     store.addLocalMessage(selected.id, text)
+                                    messages = store.listMessages(selected.id)
+                                    conversations = store.listConversations()
                                 }
-                                messages = store.listMessages(selected.id)
-                                conversations = store.listConversations()
                             }
                         )
                         showContacts -> ContactsScreen(
@@ -249,7 +338,10 @@ class MainActivity : ComponentActivity() {
                                             )
                                             lxmfAddress = destination
                                             transportStarted = true
-                                            transportStatus = "Reticulum started. LXMF identity is saved on this device; no peer has been confirmed yet."
+                                            transportStatus = "Reticulum started. Checking the durable LXMF outbox..."
+                                            syncLxmf(store)
+                                            conversations = store.listConversations()
+                                            transportStatus = "Reticulum is running. Outbox submitted where routes were available; waiting messages remain queued."
                                         } catch (error: Exception) {
                                             transportStatus = "FAILED: ${error.javaClass.simpleName}: ${error.message}"
                                         }
