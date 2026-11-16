@@ -15,6 +15,7 @@ dependencies = [
 
 [project.optional-dependencies]
 test = ["pytest>=8,<9"]
+mesh = ["rns>=1.6,<2", "lxmf>=1.3,<2"]
 
 [tool.pytest.ini_options]
 pythonpath = ["."]
