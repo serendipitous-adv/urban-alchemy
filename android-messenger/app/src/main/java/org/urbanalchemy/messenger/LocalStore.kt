@@ -389,13 +389,24 @@ class LocalStore(context: Context) : SQLiteOpenHelper(context, "ua_messenger.db"
     fun markInFlightDeliveryUnknown(): Int {
         val values = ContentValues().apply { put("status", "DELIVERY_UNKNOWN") }
         return writableDatabase.update(
-            "messages", values, "status IN ('SUBMITTED', 'SENT')", null
+            "messages", values, "status IN ('SUBMITTING', 'SUBMITTED', 'SENT')", null
         )
     }
 
     @Synchronized
+    fun beginOutboundSubmission(id: String) {
+        val values = ContentValues().apply { put("status", "SUBMITTING") }
+        val updated = writableDatabase.update(
+            "messages", values,
+            "id = ? AND status IN ('QUEUED', 'WAITING_FOR_ROUTE', 'WAITING_FOR_IDENTITY')",
+            arrayOf(id)
+        )
+        check(updated == 1) { "Message is no longer eligible for LXMF submission." }
+    }
+
+    @Synchronized
     fun updateOutbound(id: String, status: String, lxmfHash: String? = null) {
-        val allowed = setOf("QUEUED", "WAITING_FOR_ROUTE", "WAITING_FOR_IDENTITY", "SUBMITTED", "SENT", "DELIVERED", "FAILED", "REJECTED", "DELIVERY_UNKNOWN")
+        val allowed = setOf("QUEUED", "WAITING_FOR_ROUTE", "WAITING_FOR_IDENTITY", "SUBMITTING", "SUBMITTED", "SENT", "DELIVERED", "FAILED", "REJECTED", "DELIVERY_UNKNOWN")
         require(status in allowed) { "Unsupported message state." }
         val values = ContentValues().apply {
             put("status", status)
