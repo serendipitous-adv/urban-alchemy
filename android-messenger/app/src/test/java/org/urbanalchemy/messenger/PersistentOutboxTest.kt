@@ -63,6 +63,47 @@ class PersistentOutboxTest {
         assertNull(restored.lastError)
     }
 
+
+    @Test fun retryTimePersistsAndMessageIsNotClaimedEarly() {
+        store.enqueue(sample())
+        store.transition("message-persist-1", DeliveryState.FAILED, "peer unavailable")
+        val decision = store.scheduleRetry("message-persist-1", 1_000L)
+        assertEquals(OutboxRetryPolicy.Decision.RetryAt(3_000L, 1), decision)
+        assertEquals(emptyList<OutboxClaim>(), store.claimDue(2_999L))
+        store.close()
+        store = PersistentOutbox(object : android.content.ContextWrapper(context) {
+            override fun getDatabasePath(name: String) = super.getDatabasePath(databaseName)
+        })
+        val claim = store.claimDue(3_000L).single()
+        assertEquals(3_000L, claim.record.nextAttemptAtEpochMillis)
+        assertEquals(1, claim.record.attemptCount)
+    }
+
+    @Test fun activeLeasePreventsSecondWorkerAndExpiredLeaseCanBeReclaimed() {
+        store.enqueue(sample())
+        val first = store.claimDue(1_000L, leaseDurationMillis = 100L).single()
+        assertEquals(emptyList<OutboxClaim>(), store.claimDue(1_050L))
+        val second = store.claimDue(1_100L, leaseDurationMillis = 100L).single()
+        assertNotEquals(first.token, second.token)
+        try {
+            store.completeClaim(first, DeliveryState.ROUTER_ACCEPTED)
+            org.junit.Assert.fail("A stale worker must not complete a reclaimed message.")
+        } catch (_: IllegalArgumentException) { }
+        assertEquals(DeliveryState.ROUTER_ACCEPTED, store.completeClaim(second, DeliveryState.ROUTER_ACCEPTED).state)
+    }
+
+    @Test fun expiredQueuedMessagesAreNotClaimed() {
+        store.enqueue(sample().copy(expiresAtEpochMillis = 2_000L))
+        assertEquals(emptyList<OutboxClaim>(), store.claimDue(2_000L))
+    }
+
+    @Test fun releasedClaimCanBeClaimedAgainImmediately() {
+        store.enqueue(sample())
+        val first = store.claimDue(1_000L).single()
+        assertEquals(true, store.releaseClaim(first))
+        assertEquals(1, store.claimDue(1_000L).size)
+    }
+
     @Test fun acknowledgementMovesSentRecordToDelivered() {
         store.enqueue(sample())
         store.transition("message-persist-1", DeliveryState.ROUTER_ACCEPTED)
