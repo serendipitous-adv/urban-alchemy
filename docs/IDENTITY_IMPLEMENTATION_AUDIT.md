@@ -7,6 +7,8 @@ Audit base: `feat/android-messenger-lxmf-runtime-init` (the base of the identity
 - `transport_probe.py` creates or loads a persistent Reticulum identity at `filesDir/reticulum/delivery_identity`, registers an LXMF delivery identity, and returns the 32-character LXMF destination.
 - The runtime currently keeps the Reticulum identity and LXMF router in process memory after startup. The identity file is persistent; the Python runtime lifecycle is foreground/activity-oriented.
 - `MainActivity` separately calls `DeviceIdentity.getOrCreate()`. That component creates an Android Keystore P-256 signing key and displays a SHA-256-derived fingerprint.
+- I1 adds a version-4 `ua_local_identity` SQLite singleton with stable locally generated Player ID and Node ID UUIDs. The first successful Reticulum startup binds the public RNS identity hash, public key bytes, and LXMF destination. Private RNS key bytes are never returned to Kotlin or stored in this table.
+- On subsequent starts, the binding is checked for exact continuity. A changed RNS identity, public key, or LXMF destination is rejected rather than silently replacing the node identity. This is a single-device local binding, not account recovery or multi-device authorization.
 - The Android Keystore key and Reticulum identity are intentionally separate keypairs with different purposes. The displayed device fingerprint is not currently a Reticulum identity hash and must not be presented as one.
 - `LocalStore` is SQLite schema version 3. Contacts currently store only `id`, `name`, `destination` (32-character LXMF hash), and `created_at`. There is no public Reticulum identity, signed identity card, or verified/unverified state in the schema.
 - Adding a contact validates only the syntax of the LXMF destination. The app documentation correctly says this does not authenticate the contact.
@@ -24,10 +26,10 @@ Audit base: `feat/android-messenger-lxmf-runtime-init` (the base of the identity
 ## Implementation sequence
 
 ### I1 — identity binding and public identity export
-- Add versioned local Player ID and Node ID records.
-- Expose the public Reticulum identity bytes/hash and derived LXMF destination from the embedded runtime; never expose private key bytes.
-- Persist the binding and validate it on every runtime start.
-- Add migration tests proving existing contacts, conversations, and messages survive.
+- [x] Add version-4 local Player ID and Node ID records with UUIDs generated once and retained across app restarts.
+- [x] Expose the public Reticulum identity bytes/hash and LXMF destination from the embedded runtime; never expose private key bytes.
+- [x] Persist the binding and reject identity/destination drift on later runtime starts.
+- [ ] Run Android build and migration tests proving existing contacts, conversations, and messages survive. The code change is committed, but runtime/build verification remains outstanding.
 
 ### I2 — verified contacts
 - Extend contacts with optional public Reticulum identity material and an explicit verification state.
