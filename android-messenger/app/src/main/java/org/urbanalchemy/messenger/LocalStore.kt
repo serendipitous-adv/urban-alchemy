@@ -288,7 +288,7 @@ class LocalStore(context: Context) : SQLiteOpenHelper(context, "ua_messenger.db"
         readableDatabase.rawQuery(
             """SELECT c.id, c.title, c.created_at,
                 (SELECT MAX(m.created_at) FROM messages m WHERE m.conversation_id = c.id) AS latest,
-                p.name, p.destination
+                p.name, p.destination, p.verified
                 FROM conversations c LEFT JOIN contacts p ON p.id = c.contact_id
                 ORDER BY COALESCE(latest, c.created_at) DESC""",
             null
@@ -298,7 +298,7 @@ class LocalStore(context: Context) : SQLiteOpenHelper(context, "ua_messenger.db"
                 val preview = latestMessagePreview(id)
                 result += Conversation(
                     id, cursor.getString(1), preview, cursor.getLong(2),
-                    cursor.getString(4), cursor.getString(5)
+                    cursor.getString(4), cursor.getString(5), cursor.getInt(6) == 1
                 )
             }
         }
