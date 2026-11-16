@@ -123,6 +123,7 @@ def send_message(recipient_hex, text, client_message_id):
                 "client_message_id": client_message_id,
                 "lxmf_hash": updated.hash.hex() if updated.hash else None,
                 "state": int(updated.state),
+                "state_name": _state_name(updated.state),
                 "progress": float(updated.progress),
             })
 
