@@ -20,6 +20,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -118,6 +119,8 @@ class MainActivity : ComponentActivity() {
                                         }
                                         conversations = snapshot.first
                                         contacts = snapshot.second
+                                    } catch (error: Exception) {
+                                        runtimeStatus = "Refresh failed: ${error.message ?: error.javaClass.simpleName}"
                                     } finally {
                                         isRefreshing = false
                                     }
@@ -518,62 +521,84 @@ private fun ChatScreen(
 ) {
     var draft by remember(conversation.id) { mutableStateOf("") }
     Column(
-        modifier = Modifier.fillMaxSize().padding(16.dp),
+        modifier = Modifier.fillMaxSize().imePadding().padding(horizontal = 16.dp, vertical = 10.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
-        Row(modifier = Modifier.fillMaxWidth()) {
-            TextButton(onClick = onBack) { Text("‹ Conversations") }
-            Column(modifier = Modifier.weight(1f).padding(top = 8.dp)) {
-                Text(conversation.title, style = MaterialTheme.typography.titleLarge)
+        Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+            TextButton(onClick = onBack) { Text("‹ Back") }
+            Column(modifier = Modifier.weight(1f).padding(start = 4.dp)) {
+                Text(conversation.title, style = MaterialTheme.typography.titleLarge, maxLines = 1)
                 Text(
-                    conversation.recipientAddress?.let { "Recipient: $it · unverified" }
+                    conversation.recipientAddress?.let { "LXMF destination · unverified" }
                         ?: "Private local conversation",
-                    style = MaterialTheme.typography.bodySmall
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
         }
-        if (messages.isEmpty()) {
-            Text("No messages yet. Send a note to create your first encrypted local message.")
-        } else {
-            LazyColumn(
-                modifier = Modifier.weight(1f).fillMaxWidth(),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
+        LazyColumn(
+            modifier = Modifier.weight(1f).fillMaxWidth(),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            if (messages.isEmpty()) {
+                item {
+                    Card(modifier = Modifier.fillMaxWidth()) {
+                        Text(
+                            "No messages yet. Send a note to create your first encrypted local message.",
+                            modifier = Modifier.padding(16.dp),
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                    }
+                }
+            } else {
                 items(messages, key = { it.id }) { message ->
                     Card(modifier = Modifier.fillMaxWidth()) {
-                        Column(modifier = Modifier.padding(12.dp)) {
-                            Text(message.text)
+                        Column(
+                            modifier = Modifier.fillMaxWidth().padding(12.dp),
+                            verticalArrangement = Arrangement.spacedBy(5.dp)
+                        ) {
+                            Text(message.text, style = MaterialTheme.typography.bodyLarge)
                             Text(
                                 "${DateFormat.getTimeInstance(DateFormat.SHORT).format(Date(message.createdAt))} · ${message.status.lowercase()}",
-                                style = MaterialTheme.typography.labelSmall
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
                     }
                 }
             }
         }
-        Spacer(modifier = Modifier.weight(0.01f))
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = androidx.compose.ui.Alignment.Bottom
+        ) {
             OutlinedTextField(
                 value = draft,
                 onValueChange = { draft = it },
                 modifier = Modifier.weight(1f),
-                label = { Text("Message") }
+                label = { Text("Message") },
+                placeholder = { Text("Write a message") },
+                maxLines = 4
             )
-            Button(onClick = {
-                val text = draft.trim()
-                if (text.isNotEmpty()) {
-                    onSend(text)
-                    draft = ""
-                }
-            }, enabled = draft.isNotBlank()) { Text("Send") }
+            Button(
+                onClick = {
+                    val text = draft.trim()
+                    if (text.isNotEmpty()) {
+                        onSend(text)
+                        draft = ""
+                    }
+                },
+                enabled = draft.isNotBlank()
+            ) { Text("Send") }
         }
         Text(
             if (conversation.recipientAddress == null)
-                "Queued on this device · Local-only"
+                "Encrypted on this device · Local-only"
             else
-                "Queued on this device · Recipient saved, not yet sent",
-            style = MaterialTheme.typography.bodySmall
+                "Queued locally · Destination saved, not yet sent",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
         )
     }
 }
