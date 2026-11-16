@@ -192,13 +192,15 @@ class PeerMessageProtocol(
     private fun scheduleNextWork() {
         if (closed) return
         val now = nowMillis()
-        val nextAt = outbox.listForRecipient(peerFingerprint).mapNotNull { record ->
-            when (record.state) {
-                DeliveryState.QUEUED -> record.nextAttemptAtEpochMillis
-                DeliveryState.SENT -> record.sentAtEpochMillis?.let { safeAdd(it, DEFAULT_ACK_TIMEOUT_MILLIS) }
-                else -> null
-            }
-        }.minOrNull()
+        val nextAt = outbox.listForRecipient(peerFingerprint)
+            .filter { it.expiresAtEpochMillis == null || it.expiresAtEpochMillis > now }
+            .mapNotNull { record ->
+                when (record.state) {
+                    DeliveryState.QUEUED -> record.nextAttemptAtEpochMillis
+                    DeliveryState.SENT -> record.sentAtEpochMillis?.let { safeAdd(it, DEFAULT_ACK_TIMEOUT_MILLIS) }
+                    else -> null
+                }
+            }.minOrNull()
         scheduledWork?.cancel(false)
         scheduledWork = nextAt?.let { dueAt ->
             val delay = (dueAt - now).coerceAtLeast(0L)
