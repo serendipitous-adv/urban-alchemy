@@ -162,6 +162,23 @@ At minimum, the protocol MUST distinguish:
 
 A recovery proof may establish continuity to a chosen verifier; it MUST NOT be treated as proof of legal identity or automatically broadcast as a public link between personas.
 
+
+### 6.3.1 Recovery-key hierarchy — accepted design direction
+
+Each persona MUST have its own independently generated recovery key, separate from both its everyday persona key and the participant's offline master recovery key.
+
+- The **persona key** signs ordinary persona activity and may authorize routine key rotation.
+- The **persona recovery key** authorizes recovery of that persona if its everyday key is lost or compromised.
+- The **offline master recovery key** certifies the persona-specific recovery key and may revoke or replace that recovery authorization under a separately specified recovery procedure. It is not used for ordinary persona recovery operations.
+
+The master key MUST NOT be able to recreate or impersonate the persona's lost private key. Recovery creates a replacement persona/key relationship and a verifiable continuity claim; it does not resurrect the old secret key.
+
+Persona recovery keys MUST be independently generated and MUST NOT be derived from a shared master seed. Compromise of one persona's recovery key MUST NOT, by itself, expose or authorize recovery of other personas.
+
+A recovery statement SHOULD identify the affected persona, replacement persona, recovery-key authority, recovery reason, issuance time, and any superseded recovery authorization. It MUST be disclosed selectively rather than globally announced by default.
+
+The exact certificate format, revocation distribution, recovery delay, and lost-master-key procedure remain open for Phase 1 research and threat modeling. Community recognition remains independent: recovery does not automatically transfer membership, reputation, SCAF, or governance rights.
+
 ### 6.4 Identity, persona, membership, and reputation
 
 These are separate concepts:
@@ -511,6 +528,7 @@ No production application implementation should begin until the Phase 0 exit cri
 | D-006 | Internal, non-transferable SCAF ledger for MVP | Existing product decision |
 | D-007 | 10 SCAF participant reward; 5 SCAF creator royalty per distinct valid completer | Existing product decision |
 | D-008 | Reticulum-native application networking; internet is optional transport | Accepted |
+| D-009 | Each persona has an independently generated recovery key certified by the offline master recovery key | Accepted design direction |
 
 ## 21. Research references
 
