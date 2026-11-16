@@ -1,0 +1,64 @@
+package org.urbanalchemy.messenger
+
+/**
+ * Transport-neutral boundary between the durable local messenger and a network transport.
+ *
+ * The local database must persist an outbound message as QUEUED before calling [send].
+ * Implementations must report protocol status honestly: ROUTER_QUEUED is not SENT, and
+ * SENT is not DELIVERED. A DELIVERED update requires a valid LXMF delivery proof.
+ *
+ * This interface deliberately does not expose Reticulum types to the UI or local store.
+ */
+interface MessengerTransport {
+    interface Listener {
+        fun onReady(localDestination: String)
+        fun onStatus(update: MessageTransportUpdate)
+        fun onIncoming(message: IncomingTransportMessage)
+        fun onError(error: TransportError)
+    }
+
+    /** Start the transport and load/create its independent persistent network identity. */
+    suspend fun start(listener: Listener)
+
+    /** Announce the local LXMF delivery destination to the Reticulum network. */
+    suspend fun announce()
+
+    /** Submit a message which has already been persisted locally. */
+    suspend fun send(message: OutboundTransportMessage)
+
+    /** Stop network activity without deleting identity, router state, or local messages. */
+    suspend fun stop()
+}
+
+data class OutboundTransportMessage(
+    val localMessageId: String,
+    val recipientDestination: String,
+    val body: String,
+    val createdAtEpochMillis: Long
+)
+
+data class IncomingTransportMessage(
+    val transportMessageId: String,
+    val senderDestination: String,
+    val body: String,
+    val receivedAtEpochMillis: Long
+)
+
+data class MessageTransportUpdate(
+    val localMessageId: String,
+    val state: State,
+    val detail: String? = null
+) {
+    enum class State {
+        ROUTER_QUEUED,
+        SENT,
+        DELIVERED,
+        FAILED
+    }
+}
+
+data class TransportError(
+    val code: String,
+    val message: String,
+    val recoverable: Boolean
+)
