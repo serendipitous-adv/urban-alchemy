@@ -29,12 +29,16 @@ class MainActivity : ComponentActivity() {
         val store = LocalStore(this)
         val identity = DeviceIdentity.getOrCreate()
         setContent {
+            var conversations by remember { mutableStateOf(store.listConversations()) }
             MaterialTheme {
                 Surface(modifier = Modifier.fillMaxSize()) {
                     MessengerHome(
                         fingerprint = identity.fingerprint,
-                        conversations = store.listConversations(),
-                        onCreateConversation = { title -> store.createConversation(title) }
+                        conversations = conversations,
+                        onCreateConversation = { title ->
+                            store.createConversation(title)
+                            conversations = store.listConversations()
+                        }
                     )
                 }
             }
@@ -49,8 +53,6 @@ private fun MessengerHome(
     onCreateConversation: (String) -> Unit
 ) {
     var newName by remember { mutableStateOf("") }
-    var refresh by remember { mutableIntStateOf(0) }
-    val currentConversations = remember(conversations, refresh) { conversations }
 
     Column(
         modifier = Modifier.fillMaxSize().padding(20.dp),
@@ -66,11 +68,11 @@ private fun MessengerHome(
             }
         }
         Text("Conversations", style = MaterialTheme.typography.titleLarge)
-        if (currentConversations.isEmpty()) {
+        if (conversations.isEmpty()) {
             Text("No conversations yet. Create one to start building your local message history.")
         } else {
             LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                items(currentConversations, key = { it.id }) { conversation ->
+                items(conversations, key = { it.id }) { conversation ->
                     Card(modifier = Modifier.fillMaxWidth()) {
                         Column(modifier = Modifier.padding(16.dp)) {
                             Text(conversation.title, style = MaterialTheme.typography.titleMedium)
@@ -93,7 +95,6 @@ private fun MessengerHome(
                 if (title.isNotEmpty()) {
                     onCreateConversation(title)
                     newName = ""
-                    refresh++
                 }
             }) {
                 Text("Create")
