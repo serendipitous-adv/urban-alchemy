@@ -148,3 +148,22 @@ def drain_events(limit=100):
         if _runtime_state is None:
             raise RuntimeError("Start Reticulum before reading messages.")
     return lxmf_drain(limit)
+
+
+def create_contact_invite(display_name, player_id=None):
+    """Export public contact details for sharing; never exports private keys."""
+    with _runtime_lock:
+        if _runtime_state is None:
+            raise RuntimeError("Start Reticulum before creating a contact invite.")
+        identity = _runtime_state["identity"]
+        source = _runtime_state["source"]
+        invite = {
+            "type": "urban-alchemy-contact",
+            "version": 1,
+            "display_name": str(display_name or "Urban Alchemy").strip()[:80],
+            "player_id": str(player_id) if player_id else None,
+            "reticulum_identity_hash": identity.hash.hex(),
+            "reticulum_public_key": identity.get_public_key().hex(),
+            "lxmf_destination": source.hash.hex(),
+        }
+        return json.dumps(invite, separators=(",", ":"))
