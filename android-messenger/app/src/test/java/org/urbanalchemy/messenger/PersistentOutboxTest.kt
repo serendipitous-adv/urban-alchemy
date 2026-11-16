@@ -1,7 +1,6 @@
 package org.urbanalchemy.messenger
 
 import android.content.Context
-import androidx.test.core.app.ApplicationProvider
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
@@ -19,12 +18,9 @@ class PersistentOutboxTest {
     private lateinit var store: PersistentOutbox
 
     @Before fun setUp() {
-        context = ApplicationProvider.getApplicationContext()
+        context = org.robolectric.RuntimeEnvironment.getApplication()
         databaseName = "outbox-test-${System.nanoTime()}.db"
-        store = PersistentOutbox(context).apply {
-            close()
-        }
-        // Use a unique database name by constructing the helper through a test context wrapper.
+        // Route the helper database to a unique test database.
         val testContext = object : android.content.ContextWrapper(context) {
             override fun getDatabasePath(name: String) = super.getDatabasePath(databaseName)
         }
