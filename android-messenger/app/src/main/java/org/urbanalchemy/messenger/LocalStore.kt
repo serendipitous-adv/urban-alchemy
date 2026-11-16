@@ -268,6 +268,28 @@ class LocalStore(context: Context) : SQLiteOpenHelper(context, "ua_messenger.db"
         return id
     }
 
+    fun addLocalMessage(conversationId: Long, text: String): String {
+        require(text.isNotBlank()) { "Note cannot be empty." }
+        val exists = readableDatabase.rawQuery(
+            "SELECT id FROM conversations WHERE id = ?",
+            arrayOf(conversationId.toString())
+        ).use { it.moveToFirst() }
+        require(exists) { "Conversation no longer exists." }
+        val sealed = LocalMessageCrypto.encrypt(text)
+        val id = UUID.randomUUID().toString()
+        val values = ContentValues().apply {
+            put("id", id)
+            put("conversation_id", conversationId)
+            put("body", "")
+            put("created_at", System.currentTimeMillis())
+            put("status", "LOCAL_ONLY")
+            put("nonce", sealed.nonce)
+            put("ciphertext", sealed.ciphertext)
+        }
+        writableDatabase.insertOrThrow("messages", null, values)
+        return id
+    }
+
     fun listMessages(conversationId: Long): List<LocalMessage> {
         val result = mutableListOf<LocalMessage>()
         readableDatabase.rawQuery(
