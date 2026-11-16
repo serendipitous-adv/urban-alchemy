@@ -127,6 +127,7 @@ class PeerSessionHandshakeController(
             localIsInitiator
         )
         session = established
+        localEphemeral = null // Release the ephemeral private-key handle after ECDH derivation.
         state = State.ESTABLISHED
         onEstablished(established)
     }
