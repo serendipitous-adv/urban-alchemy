@@ -282,6 +282,7 @@ private fun MessengerHome(
                     }
                 }
             }
+            item { WifiDirectPanel() }
             item {
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                     Text("Conversations", style = MaterialTheme.typography.titleLarge)
