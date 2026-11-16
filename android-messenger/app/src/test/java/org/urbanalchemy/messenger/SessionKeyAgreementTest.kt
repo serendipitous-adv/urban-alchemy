@@ -1,7 +1,6 @@
 package org.urbanalchemy.messenger
 
 import android.content.Context
-import androidx.test.core.app.ApplicationProvider
 import org.junit.Assert.*
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -71,7 +70,7 @@ class SessionKeyAgreementTest {
 
     @Test fun replayGuardPersistsAcceptedOffersAndScopesBySender() {
         val p = peers()
-        val context = ApplicationProvider.getApplicationContext<Context>()
+        val context: Context = org.robolectric.RuntimeEnvironment.getApplication()
         val dbName = "session-replay-test-${System.nanoTime()}.db"
         val now = p.transcript.initiatorOffer.issuedAtEpochMillis + 1
         val guard = SessionReplayGuard(context, dbName)
