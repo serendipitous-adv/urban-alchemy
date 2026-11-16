@@ -1,8 +1,14 @@
 package org.urbanalchemy.messenger
 
 import android.os.Bundle
+import com.chaquo.python.android.AndroidPlatform
+import com.chaquo.python.Python
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -36,6 +42,7 @@ class MainActivity : ComponentActivity() {
             var selectedId by remember { mutableStateOf<Long?>(null) }
             var messages by remember { mutableStateOf(emptyList<LocalMessage>()) }
             var showContacts by remember { mutableStateOf(false) }
+            var runtimeStatus by remember { mutableStateOf("Not checked") }
 
             MaterialTheme {
                 Surface(modifier = Modifier.fillMaxSize()) {
@@ -70,6 +77,25 @@ class MainActivity : ComponentActivity() {
                             fingerprint = identity.fingerprint,
                             conversations = conversations,
                             contactCount = contacts.size,
+                            runtimeStatus = runtimeStatus,
+                            onCheckRuntime = {
+                                runtimeStatus = "Checking embedded Python modules..."
+                                lifecycleScope.launch {
+                                    runtimeStatus = try {
+                                        withContext(Dispatchers.IO) {
+                                            if (!Python.isStarted()) {
+                                                Python.start(AndroidPlatform(applicationContext))
+                                            }
+                                            Python.getInstance()
+                                                .getModule("transport_probe")
+                                                .callAttr("check_runtime")
+                                                .toString()
+                                        }
+                                    } catch (error: Exception) {
+                                        "FAILED: ${error.javaClass.simpleName}: ${error.message}"
+                                    }
+                                }
+                            },
                             onOpen = { id ->
                                 selectedId = id
                                 messages = store.listMessages(id)
@@ -92,6 +118,8 @@ private fun MessengerHome(
     fingerprint: String,
     conversations: List<Conversation>,
     contactCount: Int,
+    runtimeStatus: String,
+    onCheckRuntime: () -> Unit,
     onOpen: (Long) -> Unit,
     onCreateConversation: (String) -> Unit,
     onContacts: () -> Unit
@@ -108,6 +136,14 @@ private fun MessengerHome(
                 Text("Your local identity", style = MaterialTheme.typography.titleSmall)
                 Text(fingerprint, style = MaterialTheme.typography.bodySmall)
                 Text("Private identity key stays on this device.", style = MaterialTheme.typography.bodySmall)
+            }
+        }
+        Card(modifier = Modifier.fillMaxWidth()) {
+            Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("Transport runtime diagnostic", style = MaterialTheme.typography.titleSmall)
+                Text(runtimeStatus, style = MaterialTheme.typography.bodySmall)
+                Button(onClick = onCheckRuntime) { Text("Check embedded runtime") }
+                Text("Import test only. Does not connect, announce, or send messages.", style = MaterialTheme.typography.bodySmall)
             }
         }
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
