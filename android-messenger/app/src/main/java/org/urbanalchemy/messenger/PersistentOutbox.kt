@@ -51,7 +51,7 @@ class PersistentOutbox(context: Context) : SQLiteOpenHelper(context, "ua_transpo
     }
 
     fun transition(messageId: String, next: DeliveryState, error: String? = null): OutboxRecord = inTransaction { db ->
-        val current = find(db, messageId) ?: error("Outbox message not found.")
+        val current = find(db, messageId) ?: kotlin.error("Outbox message not found.")
         val updated = MessageDelivery.transition(current, next, error)
         val values = ContentValues().apply {
             put("state", updated.state.name)
