@@ -744,6 +744,33 @@ Dynamic quest generation and serendipitous matchmaking are core UA capabilities.
 
 The design goal is a world that can surface possibilities people did not know to ask for, without turning prediction into surveillance or suggestions into obligations. Reactive and proactive generation are complementary modes, not competing architectures.
 
+### 13.10 Open, modular, multi-level intelligence ecosystem — accepted design direction
+
+Open-source modularity is a foundational UA principle. UA MUST NOT prescribe a single AI model, provider, agent framework, inference location, or intelligence architecture. Instead, UA SHOULD define open, versioned interfaces that allow independently developed intelligence components to participate at multiple scopes.
+
+Intelligence components MAY be attached at, or made available to:
+
+- **Player level:** participant-controlled personal agents, local models, preference/recommendation engines, and creative assistants.
+- **Guild level:** community-controlled stewards, quest generators, coordination tools, and specialist agents.
+- **Patch level:** place-based opportunity discovery, local resource coordination, and community intelligence.
+- **Federation level:** opt-in cross-community discovery, collaboration matchmaking, and shared quest generation.
+- **Independent service level:** specialist models, deterministic rule engines, human-curated services, and other interoperable tools that participants or communities choose to use.
+
+Requirements and boundaries:
+
+1. Intelligence components MUST be replaceable and MUST NOT make a participant, Guild, Patch, or federation dependent on one model vendor, hosting provider, agent framework, or central UA service.
+2. UA SHOULD publish open interface specifications, schemas, and conformance tests for capability discovery, task/request exchange, proposal delivery, provenance, and authorization. Implementations MAY use different internal models, languages, runtimes, and inference methods.
+3. Intelligence MAY be local, hosted by a community, supplied by an independent provider, or distributed across multiple nodes. A component's hosting location MUST NOT grant it additional governance authority.
+4. Components MUST receive only the data and capabilities explicitly authorized for their scope and task. Access MUST be capability-scoped, revocable where practical, and subject to source-record visibility and purpose limitations.
+5. Participants and communities MUST be able to select, configure, replace, disable, or decline intelligence components without losing ownership of their underlying records or being forced to adopt AI.
+6. Outputs MUST identify the producing component/service and, where practical, its version, declared method or model, and relevant authorized source references. Consumers MUST be able to distinguish generated suggestions from human-authored or community-approved records.
+7. No intelligence component MAY independently grant membership, authority, reputation, SCAF, consent, or quest participation. Those actions remain subject to the relevant participant, community, and protocol authorization rules.
+8. Components SHOULD be able to interoperate without sharing private model weights, internal prompts, private training data, or unrelated participant records.
+9. The protocol MUST accommodate non-AI intelligence, including deterministic algorithms, community rules, curated knowledge, and human contributions. AI is optional, not a prerequisite for a functioning UA node or community.
+10. Federated intelligence exchange MUST be opt-in and scoped by the participating communities' agreements. Federation MUST NOT imply unrestricted access to member profiles, social graphs, private context, or internal services.
+
+This architecture treats intelligence as a plural, composable capability of the network rather than a centralized brain. The open protocol defines how components cooperate; participants and communities choose which intelligence they trust and where it operates.
+
 ### 13.1 Community autonomy and protocol-level governance boundaries — accepted design direction
 
 UA MUST define shared interoperability, security, and minimum privacy requirements without imposing a universal constitution or a single political structure on every Guild or Patch.
@@ -859,6 +886,8 @@ The prototype is accepted only when the following tests pass:
 
 37. The prototype demonstrates both reactive generation from explicit participant/community signals and proactive discovery from authorized context; participants can control or decline proactive suggestions, recommendations retain provenance, multi-party introductions require mutual opt-in, and no generated proposal creates obligations or bypasses ordinary quest publication and participation rules.
 
+38. The prototype can discover and invoke at least two independently implemented intelligence components through documented open interfaces at different scopes; components receive only authorized task context, can be replaced or disabled without loss of participant/community data, expose provenance, and cannot grant authority or bypass consent and governance.
+
 ## 18. Phase 0 open questions
 
 These remain deliberately unresolved until research or prototype evidence is available:
@@ -894,6 +923,7 @@ These remain deliberately unresolved until research or prototype evidence is ava
 - Privacy-preserving use of social-graph context for quest recommendations and creation, including purpose limitation, explainability, and safeguards against inferred obligations or unauthorized disclosure.
 - Dynamic quest-generation and serendipitous-matchmaking architecture, including context selection, generation provenance, decentralized model/service discovery, mutual-opt-in introductions, abuse resistance, and validation of generated quests.
 - Reactive/proactive generation policy and controls, including participant preferences, authorized context selection, recommendation explainability, feedback, rate limits, and safeguards against unwanted or manipulative suggestions.
+- Open intelligence interface specifications, capability negotiation, service discovery, permission delegation, sandboxing/isolation, component trust and provenance, and cross-implementation conformance tests.
 
 ## 19. Phase 0 exit criteria
 
@@ -947,6 +977,7 @@ No production application implementation should begin until the Phase 0 exit cri
 | D-031 | Social-graph records may inform optional quest discovery, recommendations, and community quest creation, but never create obligations, imply consent, or bypass graph visibility and quest authorization | Accepted design direction |
 | D-032 | Dynamic quest generation and serendipitous matchmaking are core UA capabilities; independent nodes and communities may generate opportunities from authorized context, with provenance, privacy, mutual opt-in, and ordinary quest validation safeguards | Accepted design direction |
 | D-033 | Quest generation is hybrid: reactive generation responds to expressed needs/offers/interests/requests, while proactive discovery surfaces opportunities from authorized context; suggestions remain controllable, provenance-aware, mutual-opt-in where multi-party, and never create obligations or bypass quest rules | Accepted design direction |
+| D-034 | Open-source modular intelligence is a foundational principle: players, Guilds, Patches, federations, and independent services may plug in replaceable intelligence components through open interfaces, with scoped permissions, provenance, and no mandatory AI or central provider | Accepted design direction |
 
 ## 21. Research references
 
