@@ -45,6 +45,21 @@ def _on_inbound(message):
         _events.append(event)
 
 
+def _state_name(state):
+    import LXMF
+    names = {
+        LXMF.LXMessage.GENERATING: "GENERATING",
+        LXMF.LXMessage.OUTBOUND: "OUTBOUND",
+        LXMF.LXMessage.SENDING: "SENDING",
+        LXMF.LXMessage.SENT: "SENT",
+        LXMF.LXMessage.DELIVERED: "DELIVERED",
+        LXMF.LXMessage.REJECTED: "REJECTED",
+        LXMF.LXMessage.CANCELLED: "CANCELLED",
+        LXMF.LXMessage.FAILED: "FAILED",
+    }
+    return names.get(state, "UNKNOWN")
+
+
 def send_message(recipient_hex, text, client_message_id):
     """Submit one opportunistic LXMF message; route discovery is non-blocking."""
     with _lock:
@@ -97,6 +112,7 @@ def send_message(recipient_hex, text, client_message_id):
                 "client_message_id": client_message_id,
                 "lxmf_hash": updated.hash.hex() if updated.hash else None,
                 "state": int(updated.state),
+                "state_name": _state_name(updated.state),
                 "progress": float(updated.progress),
             })
 
