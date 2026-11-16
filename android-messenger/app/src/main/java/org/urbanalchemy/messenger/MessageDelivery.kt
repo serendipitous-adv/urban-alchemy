@@ -74,7 +74,7 @@ object MessageDelivery {
         }
         // A valid signed receipt can arrive after a timeout moved the record back to
         // QUEUED (or FAILED). The recipient's signature proves it received this ID.
-        require(record.state != DeliveryState.DELIVERED) { "Message is already delivered." }
+        if (record.state == DeliveryState.DELIVERED) return record
         return record.copy(
             state = DeliveryState.DELIVERED,
             lastError = null,
