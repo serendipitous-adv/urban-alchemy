@@ -228,6 +228,24 @@ A normal rotation MAY be authorized by the current persona key. A compromise/los
 
 Implementations MUST retain historical signatures and provenance under the keys that originally produced them. Key rotation changes future signing authority; it MUST NOT rewrite or invalidate historical records merely because the active key changed.
 
+### 6.3.5 Selective proof of common control across personas — accepted design direction
+
+A participant MAY maintain multiple personas without publicly linking them. UA SHOULD support a privacy-preserving way for a participant to demonstrate a narrowly scoped fact about one or more personas to a chosen verifier, such as that the participant can exercise the relevant recovery authority for both personas.
+
+Requirements and boundaries:
+
+1. Cross-persona relationships MUST remain private by default. UA MUST NOT publish a stable master identifier, common-control marker, or globally reusable correlation handle in ordinary persona records, announcements, directories, or public event metadata.
+2. A proof MUST be scoped to its intended verifier and purpose wherever practical. Proofs SHOULD be unlinkable across different verifiers or sessions unless the participant explicitly consents to linkability.
+3. A verifier MUST learn no more than the claim it needs to evaluate. A proof of common control MUST NOT automatically disclose legal identity, the offline master public key, unrelated personas, recovery manifests, or the participant's full persona inventory.
+4. The participant MUST explicitly authorize disclosure. A Guild's request for proof MUST NOT create a general right to discover or correlate all of the participant's personas.
+5. Proofs MUST be bound to a fresh challenge or session context to prevent replay and unintended reuse.
+6. Verifiers MUST record the scope and result of the proof, not retain unnecessary secrets or broader relationship data.
+7. Selective proof of common control MUST NOT itself transfer membership, reputation, governance rights, SCAF, or other community-recognized authority. Those remain subject to the relevant community or record authority's rules.
+
+Zero-knowledge proofs or other privacy-preserving cryptographic techniques are preferred research candidates where they materially reduce disclosure and correlation. This is not yet a commitment to a particular proof system, credential format, or cryptographic library. Phase 1 research MUST compare the complexity, bandwidth, implementation maturity, offline usability, and privacy properties of candidate approaches. A simpler challenge-response or selectively disclosed credential MAY be used only where its disclosure and linkability limitations are explicit and acceptable for the use case.
+
+The protocol MUST NOT claim that a proof is zero-knowledge, unlinkable, or anonymous unless the implemented construction and its threat model substantiate that claim. Metadata, network observation, verifier collusion, and repeated proof requests remain potential correlation channels and MUST be considered in the privacy analysis.
+
 ### 6.4 Identity, persona, membership, and reputation
 
 These are separate concepts:
@@ -536,6 +554,7 @@ The prototype is accepted only when the following tests pass:
 18. A valid persona recovery-key signature initiates a recorded pending/disputed recovery claim; it does not automatically erase the prior persona or force community recognition. A compromised recovery key can be revoked and replaced by a separately signed master-authorized event when the master key is available.
 19. Recovery challenge windows and temporary restrictions are applied according to the relevant community/record authority's published policy, without a universal network-wide delay.
 20. Compromise recovery preserves the stable UA persona identifier while binding it to fresh RNS key material/identity where necessary; historical signatures remain verifiable under their original keys.
+21. A participant can selectively prove a narrowly scoped cross-persona common-control claim to an authorized verifier without publishing a global persona-linkage handle; proof-system claims are validated against an explicit threat model.
 
 ## 18. Phase 0 open questions
 
@@ -547,6 +566,7 @@ These remain deliberately unresolved until research or prototype evidence is ava
 - Exact trusted-network discovery and invitation wire formats.
 - Recovery manifest format and community recovery policies.
 - Stable UA persona identifier and key-transition statement schema, including RNS identity replacement semantics.
+- Privacy-preserving selective proof format for narrowly scoped cross-persona common-control claims.
 - Event identifier construction and canonicalization.
 - Synchronization summary/anti-entropy algorithm.
 - Storage encryption and secure key storage per platform.
@@ -586,6 +606,7 @@ No production application implementation should begin until the Phase 0 exit cri
 | D-011 | A persona recovery-key signature initiates a recovery claim; replacement and community recognition are not automatic | Accepted |
 | D-012 | Recovery challenge windows and recognition timelines are community-defined; no universal protocol-wide delay | Accepted |
 | D-013 | Preserve the stable UA persona through key rotation/recovery; replace compromised RNS key material and bind fresh RNS identity to the same persona where required | Accepted design direction |
+| D-014 | Support participant-controlled, privacy-preserving selective proofs of narrowly scoped common control across personas; investigate zero-knowledge techniques without prematurely selecting a proof system | Accepted design direction |
 
 ## 21. Research references
 
