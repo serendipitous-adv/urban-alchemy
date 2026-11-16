@@ -38,6 +38,7 @@ class WifiDirectPeerManager(
     interface Listener {
         fun onPeersAvailable(peers: List<WifiP2pDevice>)
         fun onConnectionStateChanged(connected: Boolean)
+        fun onFrame(frame: ByteArray)
         fun onTransportReady(transport: SocketFrameTransport)
         fun onError(message: String)
     }
@@ -48,6 +49,7 @@ class WifiDirectPeerManager(
     private val executor: ExecutorService = Executors.newCachedThreadPool()
     private val receiverRegistered = AtomicBoolean(false)
     private val socketPublished = AtomicBoolean(false)
+    private val socketEstablishing = AtomicBoolean(false)
     @Volatile private var closed = false
     @Volatile private var serverSocket: ServerSocket? = null
     @Volatile private var peerSocket: Socket? = null
@@ -117,7 +119,7 @@ class WifiDirectPeerManager(
     }
 
     private fun establishSocket(info: WifiP2pInfo) {
-        if (socketPublished.get() || closed) return
+        if (socketPublished.get() || closed || !socketEstablishing.compareAndSet(false, true)) return
         if (info.isGroupOwner) {
             executor.execute {
                 try {
@@ -134,6 +136,7 @@ class WifiDirectPeerManager(
                     serverSocket = null
                     publishSocket(accepted)
                 } catch (error: IOException) {
+                    socketEstablishing.set(false)
                     if (!closed) listener.onError("Wi-Fi Direct socket accept failed: ${error.message}")
                 }
             }
@@ -147,6 +150,7 @@ class WifiDirectPeerManager(
                     publishSocket(socket)
                 } catch (error: IOException) {
                     try { socket?.close() } catch (_: IOException) { }
+                    socketEstablishing.set(false)
                     if (!closed) listener.onError("Wi-Fi Direct socket connect failed: ${error.message}")
                 }
             }
@@ -160,7 +164,7 @@ class WifiDirectPeerManager(
         }
         peerSocket = socket
         val transport = SocketFrameTransport(socket, object : SocketFrameTransport.Listener {
-            override fun onFrame(frame: ByteArray) = Unit
+            override fun onFrame(frame: ByteArray) = listener.onFrame(frame)
             override fun onDisconnected() {
                 socketPublished.set(false)
                 if (!closed) listener.onConnectionStateChanged(false)
@@ -170,7 +174,15 @@ class WifiDirectPeerManager(
             }
         })
         frameTransport = transport
-        listener.onTransportReady(transport)
+        try {
+            transport.start()
+            listener.onTransportReady(transport)
+        } catch (error: Exception) {
+            socketPublished.set(false)
+            socketEstablishing.set(false)
+            transport.close()
+            if (!closed) listener.onError("Could not start peer frame transport: ${error.message}")
+        }
     }
 
     private fun closePeerSocket() {
@@ -178,6 +190,7 @@ class WifiDirectPeerManager(
         frameTransport = null
         peerSocket = null
         socketPublished.set(false)
+        socketEstablishing.set(false)
         try { serverSocket?.close() } catch (_: IOException) { }
         serverSocket = null
     }
