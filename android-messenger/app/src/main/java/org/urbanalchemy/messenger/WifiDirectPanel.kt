@@ -102,14 +102,12 @@ fun WifiDirectPanel() {
                     handshakeExecutor.execute {
                         runCatching {
                             val history = protocol.loadHistory()
-                            protocol.flushQueued()
-                            history
-                        }.onSuccess { history ->
                             mainHandler.post {
                                 chatLines = history.map { item ->
                                     PeerChatLine(item.messageId, item.text, item.outgoing, item.status)
                                 }
                             }
+                            protocol.flushQueued()
                         }.onFailure { error ->
                             mainHandler.post { status = "Could not restore conversation: ${error.message}" }
                         }
