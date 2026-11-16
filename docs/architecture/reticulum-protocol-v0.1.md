@@ -314,6 +314,23 @@ UA MUST distinguish portable evidence about activity or contributions from a com
 
 The governing distinction is **portable evidence, local interpretation**. Evidence schemas, selective presentation, issuer revocation, expiry, and privacy-preserving aggregation remain subject to Phase 1 research and testing.
 
+
+### 6.3.10 Participant data control, withdrawal, and distributed retention — accepted design direction
+
+UA MUST distinguish participant-controlled personal data and disclosures from signed records already distributed to other nodes or relied upon by communities.
+
+1. Participants MUST be able to edit or delete personal profile information and locally stored personal data, subject to clearly disclosed technical and legal constraints.
+2. Participants MAY withdraw optional disclosures and MUST be able to stop publishing future activity through a persona or service.
+3. Withdrawal or deletion MUST NOT be represented as guaranteed erasure of information already delivered to, copied by, backed up by, or independently retained by other nodes or recipients.
+4. Previously distributed signed events MAY remain in recipient records so that provenance, accounting, governance, and dispute histories remain verifiable. Retention MUST have a defined purpose and MUST NOT be treated as an unrestricted license for further publication or reuse.
+5. Communities and record authorities MAY retain records necessary for accounting, governance, safety, or dispute resolution under published retention and access policies. They SHOULD define retention periods, access controls, minimization, and deletion or archival procedures.
+6. Nodes SHOULD support data minimization, bounded retention where feasible, deletion of unnecessary local copies, and propagation of deletion or withdrawal requests where the receiving node's policy and obligations permit.
+7. A node receiving a withdrawal or deletion request MUST distinguish removing its own copy, ceasing future replication, restricting access, and recording a tombstone or withdrawal notice. These actions have different effects and MUST NOT be conflated.
+8. Protocols and interfaces MUST communicate the limits of distributed deletion clearly. They MUST NOT promise that a user can erase all copies of a signed event after dissemination.
+9. Sensitive personal information SHOULD NOT be placed in immutable or widely replicated event payloads when a reference, minimal claim, or separately permissioned record would suffice.
+
+The governing principle is **participant control over future disclosure and personal data, without pretending that distributed history can always be recalled**. Data classification, retention schedules, deletion-request propagation, tombstone semantics, and any applicable legal obligations remain subject to Phase 1 research and implementation policy.
+
 ### 6.4 Identity, persona, membership, and reputation
 
 These are separate concepts:
@@ -627,6 +644,7 @@ The prototype is accepted only when the following tests pass:
 23. Ordinary Guild participation does not require blanket proof of common control across personas; a narrowly scoped request for a published, proportionate purpose is handled under an explicit community policy and offers a reasonable alternative where practicable.
 24. A persona can be used across communities and carry selectively disclosed, verifiable portable records, while Guild/Patch membership, private data, reputation, SCAF, and other local authority remain subject to the originating and receiving communities' policies.
 25. Portable activity/contribution evidence retains issuer and context, while receiving communities independently interpret it; the system does not create a universal reputation score or automatically transfer local reputation judgments.
+26. A participant can delete locally controlled personal data and withdraw optional/future disclosures; nodes distinguish local deletion, cessation of replication, access restriction, and retained signed history, without promising global erasure.
 
 ## 18. Phase 0 open questions
 
@@ -643,6 +661,7 @@ These remain deliberately unresolved until research or prototype evidence is ava
 - Privacy-preserving eligibility mechanisms and alternatives to common-control proofs for one-per-participant benefits.
 - Portable credential and record formats, provenance, revocation checking, and participant-controlled export/import semantics across communities.
 - Portable reputation-evidence schemas, issuer attribution, revocation/expiry, selective presentation, and protections against global scoring or context collapse.
+- Data classification, retention schedules, deletion/withdrawal propagation, tombstone semantics, and policy/legal constraints for distributed records.
 - Event identifier construction and canonicalization.
 - Synchronization summary/anti-entropy algorithm.
 - Storage encryption and secure key storage per platform.
@@ -687,6 +706,7 @@ No production application implementation should begin until the Phase 0 exit cri
 | D-016 | No blanket common-control proof requirement for ordinary Guild participation; narrowly scoped, proportionate requests require a published purpose and reasonable alternative where practicable | Accepted design direction |
 | D-017 | Persona identity and selectively disclosed verifiable records are portable; community membership, private data, reputation, SCAF, and other authority do not transfer automatically | Accepted design direction |
 | D-018 | Reputation evidence may be selectively portable with provenance; reputation judgments remain local to each community, with no universal score or automatic transfer | Accepted design direction |
+| D-019 | Participants control personal data and future disclosure; distributed signed records may persist under purpose-limited published retention policies, and global erasure is not promised | Accepted design direction |
 
 ## 21. Research references
 
