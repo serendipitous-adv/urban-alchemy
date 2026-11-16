@@ -6,7 +6,22 @@ import android.database.sqlite.SQLiteDatabase
 import android.database.sqlite.SQLiteOpenHelper
 import java.util.UUID
 
-data class Conversation(val id: Long, val title: String, val preview: String, val updatedAt: Long)
+data class Contact(
+    val id: String,
+    val name: String,
+    val destination: String,
+    val createdAt: Long
+)
+
+data class Conversation(
+    val id: Long,
+    val title: String,
+    val preview: String,
+    val updatedAt: Long,
+    val recipientName: String? = null,
+    val recipientAddress: String? = null
+)
+
 data class LocalMessage(
     val id: String,
     val conversationId: Long,
@@ -15,15 +30,29 @@ data class LocalMessage(
     val status: String
 )
 
-class LocalStore(context: Context) : SQLiteOpenHelper(context, "ua_messenger.db", null, 2) {
+class LocalStore(context: Context) : SQLiteOpenHelper(context, "ua_messenger.db", null, 3) {
     override fun onCreate(db: SQLiteDatabase) {
+        db.execSQL(
+            """CREATE TABLE contacts (
+                id TEXT PRIMARY KEY,
+                name TEXT NOT NULL,
+                destination TEXT NOT NULL UNIQUE,
+                created_at INTEGER NOT NULL
+            )""".trimIndent()
+        )
         db.execSQL(
             """CREATE TABLE conversations (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 title TEXT NOT NULL,
-                created_at INTEGER NOT NULL
+                created_at INTEGER NOT NULL,
+                contact_id TEXT REFERENCES contacts(id) ON DELETE SET NULL
             )""".trimIndent()
         )
+        createMessagesTable(db)
+        db.execSQL("CREATE INDEX messages_conversation_time ON messages(conversation_id, created_at)")
+    }
+
+    private fun createMessagesTable(db: SQLiteDatabase) {
         db.execSQL(
             """CREATE TABLE messages (
                 id TEXT PRIMARY KEY,
@@ -36,7 +65,6 @@ class LocalStore(context: Context) : SQLiteOpenHelper(context, "ua_messenger.db"
                 FOREIGN KEY(conversation_id) REFERENCES conversations(id)
             )""".trimIndent()
         )
-        db.execSQL("CREATE INDEX messages_conversation_time ON messages(conversation_id, created_at)")
     }
 
     override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
@@ -44,12 +72,63 @@ class LocalStore(context: Context) : SQLiteOpenHelper(context, "ua_messenger.db"
             db.execSQL("ALTER TABLE messages ADD COLUMN nonce BLOB")
             db.execSQL("ALTER TABLE messages ADD COLUMN ciphertext BLOB")
         }
+        if (oldVersion < 3) {
+            db.execSQL(
+                """CREATE TABLE contacts (
+                    id TEXT PRIMARY KEY,
+                    name TEXT NOT NULL,
+                    destination TEXT NOT NULL UNIQUE,
+                    created_at INTEGER NOT NULL
+                )""".trimIndent()
+            )
+            db.execSQL("ALTER TABLE conversations ADD COLUMN contact_id TEXT REFERENCES contacts(id) ON DELETE SET NULL")
+        }
     }
 
-    fun createConversation(title: String): Long {
+    fun addContact(name: String, destinationInput: String): String {
+        val cleanName = name.trim()
+        val destination = destinationInput.trim().lowercase()
+        require(cleanName.isNotEmpty()) { "Enter a contact name." }
+        require(Regex("^[0-9a-f]{32}$").matches(destination)) {
+            "Enter a 32-character hexadecimal LXMF destination."
+        }
+        val id = UUID.randomUUID().toString()
+        val values = ContentValues().apply {
+            put("id", id)
+            put("name", cleanName)
+            put("destination", destination)
+            put("created_at", System.currentTimeMillis())
+        }
+        writableDatabase.insertOrThrow("contacts", null, values)
+        return id
+    }
+
+    fun listContacts(): List<Contact> {
+        val result = mutableListOf<Contact>()
+        readableDatabase.rawQuery(
+            "SELECT id, name, destination, created_at FROM contacts ORDER BY name COLLATE NOCASE",
+            null
+        ).use { cursor ->
+            while (cursor.moveToNext()) {
+                result += Contact(cursor.getString(0), cursor.getString(1), cursor.getString(2), cursor.getLong(3))
+            }
+        }
+        return result
+    }
+
+    fun createConversation(title: String): Long = insertConversation(title, null)
+
+    fun createConversationForContact(contactId: String): Long {
+        val contact = listContacts().firstOrNull { it.id == contactId }
+            ?: error("Contact no longer exists.")
+        return insertConversation(contact.name, contact.id)
+    }
+
+    private fun insertConversation(title: String, contactId: String?): Long {
         val values = ContentValues().apply {
             put("title", title.trim())
             put("created_at", System.currentTimeMillis())
+            if (contactId == null) putNull("contact_id") else put("contact_id", contactId)
         }
         return writableDatabase.insertOrThrow("conversations", null, values)
     }
@@ -58,14 +137,19 @@ class LocalStore(context: Context) : SQLiteOpenHelper(context, "ua_messenger.db"
         val result = mutableListOf<Conversation>()
         readableDatabase.rawQuery(
             """SELECT c.id, c.title, c.created_at,
-                (SELECT MAX(m.created_at) FROM messages m WHERE m.conversation_id = c.id) AS latest
-                FROM conversations c ORDER BY COALESCE(latest, c.created_at) DESC""",
+                (SELECT MAX(m.created_at) FROM messages m WHERE m.conversation_id = c.id) AS latest,
+                p.name, p.destination
+                FROM conversations c LEFT JOIN contacts p ON p.id = c.contact_id
+                ORDER BY COALESCE(latest, c.created_at) DESC""",
             null
         ).use { cursor ->
             while (cursor.moveToNext()) {
                 val id = cursor.getLong(0)
                 val preview = latestMessagePreview(id)
-                result += Conversation(id, cursor.getString(1), preview, cursor.getLong(2))
+                result += Conversation(
+                    id, cursor.getString(1), preview, cursor.getLong(2),
+                    cursor.getString(4), cursor.getString(5)
+                )
             }
         }
         return result

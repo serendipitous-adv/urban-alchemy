@@ -32,13 +32,16 @@ class MainActivity : ComponentActivity() {
         val identity = DeviceIdentity.getOrCreate()
         setContent {
             var conversations by remember { mutableStateOf(store.listConversations()) }
+            var contacts by remember { mutableStateOf(store.listContacts()) }
             var selectedId by remember { mutableStateOf<Long?>(null) }
             var messages by remember { mutableStateOf(emptyList<LocalMessage>()) }
+            var showContacts by remember { mutableStateOf(false) }
+
             MaterialTheme {
                 Surface(modifier = Modifier.fillMaxSize()) {
                     val selected = conversations.firstOrNull { it.id == selectedId }
-                    if (selected != null) {
-                        ChatScreen(
+                    when {
+                        selected != null -> ChatScreen(
                             conversation = selected,
                             messages = messages,
                             onBack = { selectedId = null },
@@ -48,10 +51,25 @@ class MainActivity : ComponentActivity() {
                                 conversations = store.listConversations()
                             }
                         )
-                    } else {
-                        MessengerHome(
+                        showContacts -> ContactsScreen(
+                            contacts = contacts,
+                            onBack = { showContacts = false },
+                            onAddContact = { name, address ->
+                                store.addContact(name, address)
+                                contacts = store.listContacts()
+                            },
+                            onStartConversation = { contactId ->
+                                val id = store.createConversationForContact(contactId)
+                                conversations = store.listConversations()
+                                messages = store.listMessages(id)
+                                selectedId = id
+                                showContacts = false
+                            }
+                        )
+                        else -> MessengerHome(
                             fingerprint = identity.fingerprint,
                             conversations = conversations,
+                            contactCount = contacts.size,
                             onOpen = { id ->
                                 selectedId = id
                                 messages = store.listMessages(id)
@@ -59,7 +77,8 @@ class MainActivity : ComponentActivity() {
                             onCreateConversation = { title ->
                                 store.createConversation(title)
                                 conversations = store.listConversations()
-                            }
+                            },
+                            onContacts = { showContacts = true }
                         )
                     }
                 }
@@ -72,8 +91,10 @@ class MainActivity : ComponentActivity() {
 private fun MessengerHome(
     fingerprint: String,
     conversations: List<Conversation>,
+    contactCount: Int,
     onOpen: (Long) -> Unit,
-    onCreateConversation: (String) -> Unit
+    onCreateConversation: (String) -> Unit,
+    onContacts: () -> Unit
 ) {
     var newName by remember { mutableStateOf("") }
     Column(
@@ -89,9 +110,12 @@ private fun MessengerHome(
                 Text("Private identity key stays on this device.", style = MaterialTheme.typography.bodySmall)
             }
         }
-        Text("Conversations", style = MaterialTheme.typography.titleLarge)
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+            Text("Conversations", style = MaterialTheme.typography.titleLarge)
+            TextButton(onClick = onContacts) { Text("Contacts ($contactCount)") }
+        }
         if (conversations.isEmpty()) {
-            Text("No conversations yet. Create one below.")
+            Text("No conversations yet. Create one below or start from a contact.")
         } else {
             LazyColumn(
                 modifier = Modifier.weight(1f),
@@ -106,6 +130,11 @@ private fun MessengerHome(
                             Column(modifier = Modifier.fillMaxWidth().padding(8.dp)) {
                                 Text(conversation.title, style = MaterialTheme.typography.titleMedium)
                                 Text(conversation.preview, style = MaterialTheme.typography.bodySmall)
+                                if (conversation.recipientAddress != null) {
+                                    Text("To: ${conversation.recipientAddress}", style = MaterialTheme.typography.labelSmall)
+                                } else {
+                                    Text("Local-only conversation", style = MaterialTheme.typography.labelSmall)
+                                }
                             }
                         }
                     }
@@ -116,7 +145,7 @@ private fun MessengerHome(
             OutlinedTextField(
                 value = newName,
                 onValueChange = { newName = it },
-                label = { Text("New conversation") },
+                label = { Text("New local conversation") },
                 modifier = Modifier.weight(1f),
                 singleLine = true
             )
@@ -129,6 +158,75 @@ private fun MessengerHome(
             }) { Text("Create") }
         }
         Text("Local storage only · No internet or server required", style = MaterialTheme.typography.bodySmall)
+    }
+}
+
+@Composable
+private fun ContactsScreen(
+    contacts: List<Contact>,
+    onBack: () -> Unit,
+    onAddContact: (String, String) -> Unit,
+    onStartConversation: (String) -> Unit
+) {
+    var name by remember { mutableStateOf("") }
+    var address by remember { mutableStateOf("") }
+    var error by remember { mutableStateOf<String?>(null) }
+
+    Column(
+        modifier = Modifier.fillMaxSize().padding(20.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        TextButton(onClick = onBack) { Text("‹ Conversations") }
+        Text("Contacts", style = MaterialTheme.typography.headlineMedium)
+        Text("Add a contact using their 32-character LXMF destination. Contacts are stored only on this device.")
+        OutlinedTextField(
+            value = name,
+            onValueChange = { name = it; error = null },
+            label = { Text("Contact name") },
+            modifier = Modifier.fillMaxWidth(),
+            singleLine = true
+        )
+        OutlinedTextField(
+            value = address,
+            onValueChange = { address = it; error = null },
+            label = { Text("LXMF destination (32 hex characters)") },
+            modifier = Modifier.fillMaxWidth(),
+            singleLine = true
+        )
+        if (error != null) Text(error!!, color = MaterialTheme.colorScheme.error)
+        Button(
+            onClick = {
+                try {
+                    onAddContact(name, address)
+                    name = ""
+                    address = ""
+                    error = null
+                } catch (exception: Exception) {
+                    error = exception.message ?: "Could not add contact."
+                }
+            },
+            enabled = name.isNotBlank() && address.isNotBlank()
+        ) { Text("Save contact") }
+
+        Text("Saved contacts", style = MaterialTheme.typography.titleLarge)
+        if (contacts.isEmpty()) {
+            Text("No contacts yet.")
+        } else {
+            LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                items(contacts, key = { it.id }) { contact ->
+                    Card(modifier = Modifier.fillMaxWidth()) {
+                        Column(modifier = Modifier.padding(12.dp)) {
+                            Text(contact.name, style = MaterialTheme.typography.titleMedium)
+                            Text(contact.destination, style = MaterialTheme.typography.bodySmall)
+                            Text("Unverified · Address saved locally", style = MaterialTheme.typography.labelSmall)
+                            TextButton(onClick = { onStartConversation(contact.id) }) {
+                                Text("Start conversation")
+                            }
+                        }
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -148,7 +246,11 @@ private fun ChatScreen(
             TextButton(onClick = onBack) { Text("‹ Conversations") }
             Column(modifier = Modifier.weight(1f).padding(top = 8.dp)) {
                 Text(conversation.title, style = MaterialTheme.typography.titleLarge)
-                Text("Private local conversation", style = MaterialTheme.typography.bodySmall)
+                Text(
+                    conversation.recipientAddress?.let { "Recipient: $it · unverified" }
+                        ?: "Private local conversation",
+                    style = MaterialTheme.typography.bodySmall
+                )
             }
         }
         if (messages.isEmpty()) {
@@ -187,6 +289,12 @@ private fun ChatScreen(
                 }
             }, enabled = draft.isNotBlank()) { Text("Send") }
         }
-        Text("Queued on this device · Not sent to a recipient", style = MaterialTheme.typography.bodySmall)
+        Text(
+            if (conversation.recipientAddress == null)
+                "Queued on this device · Local-only"
+            else
+                "Queued on this device · Recipient saved, not yet sent",
+            style = MaterialTheme.typography.bodySmall
+        )
     }
 }
