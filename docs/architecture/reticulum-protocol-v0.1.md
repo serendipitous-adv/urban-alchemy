@@ -685,6 +685,16 @@ A relationship MUST NOT automatically create a quest, assign a participant, crea
 
 Communities MAY create quests intended to strengthen relationships or facilitate new connections. Such quests MUST remain optional and MUST NOT be treated as proof that a relationship exists merely because a participant viewed, accepted, or completed a quest.
 
+Dynamic quest generation and serendipitous matchmaking are core UA capabilities, not merely optional interface conveniences. UA SHOULD enable clients and community-controlled services to compose new opportunities from explicitly available context, including participant-declared interests, skills, needs, offers, relationships, local conditions, active quests, activity zones, and community-defined goals.
+
+Generation MAY produce individual suggestions, collaborative invitations, proposed quest templates, or complete draft quests. It MAY identify potentially complementary participants or communities and suggest an introduction or shared activity. Generated content MUST be distinguishable from participant-authored content, identify its generating mechanism or responsible service where practical, and remain subject to the same authorization, visibility, consent, and provenance rules as other UA records.
+
+Matchmaking SHOULD support mutual opt-in: sensitive introductions or disclosure of another participant's identity or contact details SHOULD require authorization from each affected party. Systems MUST NOT expose private graph data, infer or publish relationships, enroll participants, assign obligations, or initiate contact merely because an algorithm identifies a possible match. Participants MUST be able to decline, mute, or tune recommendations without penalty.
+
+Dynamic generation MUST NOT be centralized by necessity. Different nodes, Guilds, Patches, and participant-controlled agents MAY use different generation strategies and models. No single algorithm or AI steward has authority to define the world's quests or determine which opportunities are legitimate. Communities MAY define constraints and priorities for generation within their own spaces, while participants retain control over their own participation.
+
+Generated quests MUST pass ordinary quest validation before publication or execution, including explicit authorship/authorization, scope, visibility, participation terms, reward rules, expiry where applicable, and safety constraints. The system SHOULD preserve a meaningful distinction between a suggestion, a draft, a published quest, and an accepted commitment.
+
 The social graph and opportunity graph are related but distinct:
 - The **social graph** represents explicitly published relationship assertions, confirmations, affiliations, and interaction history.
 - The **opportunity graph** represents current or time-bounded quests, gatherings, offers, requests, and potential interactions.
@@ -828,6 +838,8 @@ The prototype is accepted only when the following tests pass:
 
 35. A client or community service can optionally recommend or create a quest using only relationship/social-graph records it is authorized to access; recommendations do not create obligations, reveal restricted graph data, or establish relationships, and quest creation/participation requires explicit action.
 
+36. Independent nodes or community-controlled services can generate and recommend a quest or potential collaboration from authorized context; generated content is distinguishable from authored content, sensitive introductions use mutual opt-in, no participant is enrolled or contacted without authorization, and a generated quest passes ordinary publication and participation validation.
+
 ## 18. Phase 0 open questions
 
 These remain deliberately unresolved until research or prototype evidence is available:
@@ -861,6 +873,7 @@ These remain deliberately unresolved until research or prototype evidence is ava
 - Interoperable core relationship vocabulary, custom relationship-type identifiers and definitions, and safe handling of unknown types across clients.
 - Optional community-scoped relationship intensity/progression models, participant consent and disclosure, and interoperability for unknown progression schemes.
 - Privacy-preserving use of social-graph context for quest recommendations and creation, including purpose limitation, explainability, and safeguards against inferred obligations or unauthorized disclosure.
+- Dynamic quest-generation and serendipitous-matchmaking architecture, including context selection, generation provenance, decentralized model/service discovery, mutual-opt-in introductions, abuse resistance, and validation of generated quests.
 
 ## 19. Phase 0 exit criteria
 
@@ -912,6 +925,7 @@ No production application implementation should begin until the Phase 0 exit cri
 | D-029 | Use a small interoperable core relationship vocabulary while allowing extensible participant- and community-defined relationship types with stable identifiers and preserved unknown types | Accepted design direction |
 | D-030 | Relationship types are independent by default; optional progression/intensity systems may be defined locally by communities, with no universal hierarchy or score | Accepted design direction |
 | D-031 | Social-graph records may inform optional quest discovery, recommendations, and community quest creation, but never create obligations, imply consent, or bypass graph visibility and quest authorization | Accepted design direction |
+| D-032 | Dynamic quest generation and serendipitous matchmaking are core UA capabilities; independent nodes and communities may generate opportunities from authorized context, with provenance, privacy, mutual opt-in, and ordinary quest validation safeguards | Accepted design direction |
 
 ## 21. Research references
 
