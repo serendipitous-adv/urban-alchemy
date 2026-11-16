@@ -18,7 +18,7 @@ class LocalQueuedMessageCodecTest {
     }
 
     @After fun restoreAndroidKeystore() {
-        LocalMessageCrypto.keyProvider = { throw IllegalStateException("Android Keystore is unavailable in plain JVM tests.") }
+        LocalMessageCrypto.resetKeyProviderForTests()
     }
 
     @Test fun queuedPayloadCanBeOpenedIndependentlyOfPeerSessionKeys() {
