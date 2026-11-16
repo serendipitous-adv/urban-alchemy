@@ -69,7 +69,7 @@ class PersistentOutbox(context: Context) : SQLiteOpenHelper(context, "ua_transpo
         jitterPermille: Int = 1_000,
         maxRetries: Int = OutboxRetryPolicy.DEFAULT_MAX_RETRIES
     ): OutboxRetryPolicy.Decision = inTransaction { db ->
-        val current = find(db, messageId) ?: error("Outbox message not found.")
+        val current = find(db, messageId) ?: throw IllegalStateException("Outbox message not found.")
         val decision = OutboxRetryPolicy.decide(current, nowEpochMillis, nowEpochMillis, maxRetries, jitterPermille)
         if (decision is OutboxRetryPolicy.Decision.RetryAt) {
             val queued = MessageDelivery.transition(current, DeliveryState.QUEUED)
