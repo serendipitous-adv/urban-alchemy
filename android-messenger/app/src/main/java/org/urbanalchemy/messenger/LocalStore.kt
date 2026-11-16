@@ -31,7 +31,8 @@ data class Conversation(
     val preview: String,
     val updatedAt: Long,
     val recipientName: String? = null,
-    val recipientAddress: String? = null
+    val recipientAddress: String? = null,
+    val recipientVerified: Boolean = false
 )
 
 data class LocalMessage(
