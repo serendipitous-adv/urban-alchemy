@@ -6,50 +6,36 @@ import java.io.DataInputStream
 import java.io.DataOutputStream
 import java.util.Base64
 
-/**
- * Versioned wire container for an already-encrypted message body.
- *
- * This class does not encrypt or authenticate data. Callers must supply ciphertext
- * produced by the end-to-end crypto layer; the nonce is the AEAD nonce for that ciphertext.
- * The encoded form is transport-neutral and can be carried by Wi-Fi, Bluetooth, or LXMF.
- */
+/** Versioned transport-neutral container for authenticated, already-encrypted messages. */
 data class EncryptedMessageEnvelope(
-    val messageId: String,
-    val senderIdentity: String,
-    val recipientIdentity: String,
-    val createdAtEpochMillis: Long,
-    val expiresAtEpochMillis: Long?,
-    val nonce: ByteArray,
-    val ciphertext: ByteArray,
+    val messageId: String, val senderIdentity: String, val recipientIdentity: String,
+    val createdAtEpochMillis: Long, val expiresAtEpochMillis: Long?,
+    val nonce: ByteArray, val ciphertext: ByteArray, val signature: ByteArray,
     val version: Int = CURRENT_VERSION
 ) {
     init {
         require(version == CURRENT_VERSION) { "Unsupported message envelope version." }
-        require(messageId.isNotBlank() && messageId.length <= MAX_ID_LENGTH) { "Invalid message ID." }
-        require(senderIdentity.isNotBlank() && senderIdentity.length <= MAX_IDENTITY_LENGTH) { "Invalid sender identity." }
-        require(recipientIdentity.isNotBlank() && recipientIdentity.length <= MAX_IDENTITY_LENGTH) { "Invalid recipient identity." }
-        require(createdAtEpochMillis >= 0) { "Creation time must not be negative." }
-        require(expiresAtEpochMillis == null || expiresAtEpochMillis > createdAtEpochMillis) { "Expiry must be later than creation." }
-        require(nonce.size == GCM_NONCE_BYTES) { "AES-GCM nonce must be 12 bytes." }
-        require(ciphertext.isNotEmpty() && ciphertext.size <= MAX_CIPHERTEXT_BYTES) { "Invalid ciphertext size." }
+        require(messageId.isNotBlank() && messageId.length <= MAX_ID_LENGTH)
+        require(senderIdentity.isNotBlank() && senderIdentity.length <= MAX_IDENTITY_LENGTH)
+        require(recipientIdentity.isNotBlank() && recipientIdentity.length <= MAX_IDENTITY_LENGTH)
+        require(senderIdentity != recipientIdentity)
+        require(createdAtEpochMillis >= 0)
+        require(expiresAtEpochMillis == null || expiresAtEpochMillis > createdAtEpochMillis)
+        require(nonce.size == NONCE_BYTES) { "AES-GCM nonce must be 12 bytes." }
+        require(ciphertext.size in MIN_CIPHERTEXT_BYTES..MAX_CIPHERTEXT_BYTES)
+        require(signature.size in MIN_SIGNATURE_BYTES..MAX_SIGNATURE_BYTES) { "Missing or invalid message signature." }
     }
 
-    /** Encode the complete binary envelope as Base64 for the durable outbox. */
     fun encodeBase64(): String {
         val bytes = ByteArrayOutputStream().use { buffer ->
-            DataOutputStream(buffer).use { output ->
-                output.write(MAGIC)
-                output.writeInt(version)
-                output.writeUTF(messageId)
-                output.writeUTF(senderIdentity)
-                output.writeUTF(recipientIdentity)
-                output.writeLong(createdAtEpochMillis)
-                output.writeBoolean(expiresAtEpochMillis != null)
-                expiresAtEpochMillis?.let(output::writeLong)
-                output.writeInt(nonce.size)
-                output.write(nonce)
-                output.writeInt(ciphertext.size)
-                output.write(ciphertext)
+            DataOutputStream(buffer).use { out ->
+                out.write(MAGIC); out.writeInt(version)
+                out.writeUTF(messageId); out.writeUTF(senderIdentity); out.writeUTF(recipientIdentity)
+                out.writeLong(createdAtEpochMillis)
+                out.writeBoolean(expiresAtEpochMillis != null); expiresAtEpochMillis?.let(out::writeLong)
+                out.writeInt(nonce.size); out.write(nonce)
+                out.writeInt(ciphertext.size); out.write(ciphertext)
+                out.writeInt(signature.size); out.write(signature)
             }
             buffer.toByteArray()
         }
@@ -57,53 +43,51 @@ data class EncryptedMessageEnvelope(
         return Base64.getEncoder().encodeToString(bytes)
     }
 
-    /** Create a queued outbox record; this does not send or deliver the message. */
-    fun toOutboxRecord(): OutboxRecord = OutboxRecord(
-        messageId = messageId,
-        recipientIdentity = recipientIdentity,
-        payloadBase64 = encodeBase64(),
-        createdAtEpochMillis = createdAtEpochMillis,
-        expiresAtEpochMillis = expiresAtEpochMillis
+    fun toOutboxRecord() = OutboxRecord(
+        messageId, recipientIdentity, encodeBase64(), createdAtEpochMillis, expiresAtEpochMillis
     )
 
     companion object {
-        const val CURRENT_VERSION = 1
-        private const val GCM_NONCE_BYTES = 12
+        const val CURRENT_VERSION = 2
+        private const val NONCE_BYTES = 12
+        private const val MIN_CIPHERTEXT_BYTES = 16
         private const val MAX_ID_LENGTH = 128
         private const val MAX_IDENTITY_LENGTH = 512
         private const val MAX_CIPHERTEXT_BYTES = 1_048_576
-        private const val MAX_ENCODED_BYTES = MAX_CIPHERTEXT_BYTES + 2_048
+        private const val MIN_SIGNATURE_BYTES = 8
+        private const val MAX_SIGNATURE_BYTES = 512
+        private const val MAX_ENCODED_BYTES = MAX_CIPHERTEXT_BYTES + 4_096
         private val MAGIC = byteArrayOf(0x55, 0x41, 0x45, 0x4d)
 
+        fun fromCryptoMessage(message: SessionMessageCrypto.Message, expiresAtEpochMillis: Long? = null) =
+            EncryptedMessageEnvelope(
+                message.messageId, message.senderFingerprint, message.recipientFingerprint,
+                message.createdAtEpochMillis, expiresAtEpochMillis, message.nonce,
+                message.ciphertext, message.signature
+            )
+
         fun decodeBase64(encoded: String): EncryptedMessageEnvelope {
-            require(encoded.isNotBlank() && encoded.length <= ((MAX_ENCODED_BYTES + 2) / 3) * 4) {
-                "Invalid encoded envelope size."
+            require(encoded.isNotBlank() && encoded.length <= ((MAX_ENCODED_BYTES + 2) / 3) * 4)
+            val bytes = try { Base64.getDecoder().decode(encoded) } catch (e: IllegalArgumentException) {
+                throw IllegalArgumentException("Envelope is not valid Base64.", e)
             }
-            val bytes = try { Base64.getDecoder().decode(encoded) } catch (error: IllegalArgumentException) {
-                throw IllegalArgumentException("Envelope is not valid Base64.", error)
-            }
-            require(bytes.size <= MAX_ENCODED_BYTES) { "Encoded envelope is too large." }
+            require(bytes.size <= MAX_ENCODED_BYTES)
             DataInputStream(ByteArrayInputStream(bytes)).use { input ->
-                val magic = ByteArray(MAGIC.size)
-                input.readFully(magic)
+                val magic = ByteArray(MAGIC.size).also(input::readFully)
                 require(magic.contentEquals(MAGIC)) { "Unrecognized message envelope." }
                 val version = input.readInt()
                 require(version == CURRENT_VERSION) { "Unsupported message envelope version." }
-                val messageId = input.readUTF()
-                val sender = input.readUTF()
-                val recipient = input.readUTF()
-                val createdAt = input.readLong()
-                val expiresAt = if (input.readBoolean()) input.readLong() else null
-                val nonceSize = input.readInt()
-                require(nonceSize == GCM_NONCE_BYTES) { "Invalid envelope nonce size." }
+                val id = input.readUTF(); val sender = input.readUTF(); val recipient = input.readUTF()
+                val created = input.readLong()
+                val expires = if (input.readBoolean()) input.readLong() else null
+                val nonceSize = input.readInt(); require(nonceSize == NONCE_BYTES)
                 val nonce = ByteArray(nonceSize).also(input::readFully)
-                val ciphertextSize = input.readInt()
-                require(ciphertextSize in 1..MAX_CIPHERTEXT_BYTES) { "Invalid envelope ciphertext size." }
-                val ciphertext = ByteArray(ciphertextSize).also(input::readFully)
+                val cipherSize = input.readInt(); require(cipherSize in MIN_CIPHERTEXT_BYTES..MAX_CIPHERTEXT_BYTES)
+                val ciphertext = ByteArray(cipherSize).also(input::readFully)
+                val signatureSize = input.readInt(); require(signatureSize in MIN_SIGNATURE_BYTES..MAX_SIGNATURE_BYTES)
+                val signature = ByteArray(signatureSize).also(input::readFully)
                 require(input.read() == -1) { "Unexpected trailing envelope data." }
-                return EncryptedMessageEnvelope(
-                    messageId, sender, recipient, createdAt, expiresAt, nonce, ciphertext, version
-                )
+                return EncryptedMessageEnvelope(id, sender, recipient, created, expires, nonce, ciphertext, signature, version)
             }
         }
     }
