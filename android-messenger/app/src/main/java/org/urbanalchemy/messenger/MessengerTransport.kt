@@ -1,20 +1,20 @@
 package org.urbanalchemy.messenger
 
 /**
- * Transport-neutral boundary between the durable local messenger and a network transport.
+ * Optional Reticulum/LXMF adapter boundary. The standalone UA peer transport is defined separately.
  *
  * The local database must persist an outbound message as QUEUED before calling [send].
  * Implementations must report protocol status honestly: ROUTER_QUEUED is not SENT, and
  * SENT is not DELIVERED. A DELIVERED update requires a valid LXMF delivery proof.
  *
- * This interface deliberately does not expose Reticulum types to the UI or local store.
+ * This adapter is deliberately isolated from UA's transport-neutral message and peer-connection layers.
  */
-interface MessengerTransport {
+interface ReticulumLxmfTransport {
     interface Listener {
         fun onReady(localDestination: String)
-        fun onStatus(update: MessageTransportUpdate)
-        fun onIncoming(message: IncomingTransportMessage)
-        fun onError(error: TransportError)
+        fun onStatus(update: LxmfTransportUpdate)
+        fun onIncoming(message: LxmfIncomingMessage)
+        fun onError(error: LxmfTransportError)
     }
 
     /** Start the transport and load/create its independent persistent network identity. */
@@ -24,7 +24,7 @@ interface MessengerTransport {
     suspend fun announce()
 
     /** Submit a message which has already been persisted locally. */
-    suspend fun send(message: OutboundTransportMessage)
+    suspend fun send(message: LxmfOutboundMessage)
 
     /** Stop network activity without deleting identity, router state, or local messages. */
     suspend fun stop()
