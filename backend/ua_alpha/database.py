@@ -86,6 +86,13 @@ CREATE TABLE IF NOT EXISTS event_records (
 );
 CREATE INDEX IF NOT EXISTS idx_events_order ON event_records(created_at, event_id);
 CREATE INDEX IF NOT EXISTS idx_events_persona ON event_records(persona_id, created_at);
+CREATE TABLE IF NOT EXISTS peer_sync_state (
+    peer_id TEXT NOT NULL,
+    direction TEXT NOT NULL CHECK (direction IN ('send', 'receive')),
+    cursor_event_id TEXT,
+    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (peer_id, direction)
+);
 CREATE TRIGGER IF NOT EXISTS event_records_no_update
 BEFORE UPDATE ON event_records BEGIN
     SELECT RAISE(ABORT, 'event records are append-only');
