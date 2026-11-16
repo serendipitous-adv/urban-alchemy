@@ -1,11 +1,11 @@
 """Transport contracts shared by Reticulum and internet adapters.
 
-Adapters are responsible for authenticating the remote endpoint and delivering
-bounded protocol messages. They do not decide event trust or domain authority.
+Adapters authenticate remote endpoints and deliver bounded protocol messages.
+They do not decide event trust or domain authority.
 """
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Protocol, runtime_checkable
 
 from .sync import SyncBatch
@@ -29,18 +29,21 @@ class PeerAddress:
 
 @dataclass(frozen=True)
 class PeerSession:
-    """An authenticated transport session; identity is supplied by its adapter."""
+    """Authenticated local/remote peer identities supplied by the adapter."""
 
     peer_id: str
     transport: str
     authenticated: bool
     session_id: str
+    local_peer_id: str
 
     def require_authenticated(self) -> None:
         if not self.authenticated:
             raise TransportError("peer session is not authenticated")
-        if not self.peer_id or not self.session_id:
+        if not self.peer_id or not self.local_peer_id or not self.session_id:
             raise TransportError("peer session identity is incomplete")
+        if self.peer_id == self.local_peer_id:
+            raise TransportError("a peer session cannot be self-connected")
 
 
 @dataclass(frozen=True)
@@ -51,8 +54,6 @@ class SyncAcknowledgement:
 
 @runtime_checkable
 class PeerTransport(Protocol):
-    """Minimal transport contract; concrete implementations own framing/security."""
-
     @property
     def name(self) -> str: ...
 
@@ -62,7 +63,7 @@ class PeerTransport(Protocol):
 
 
 class SyncCoordinator:
-    """Connects an authenticated transport session to the shared sync engine."""
+    """Connects authenticated transport sessions to the shared sync engine."""
 
     def __init__(self, engine, trusted_personas) -> None:
         self.engine = engine
@@ -75,6 +76,9 @@ class SyncCoordinator:
         batch = self.engine.prepare_outbound(session.peer_id, limit)
         if not batch.events:
             return 0
+        # The batch identifies its sender; the durable send cursor is keyed by
+        # the remote peer. These are intentionally different identities.
+        batch = replace(batch, peer_id=session.local_peer_id)
         acknowledgement = transport.exchange(address, batch)
         if acknowledgement.peer_id != session.peer_id:
             raise TransportError("acknowledgement peer does not match authenticated session")
