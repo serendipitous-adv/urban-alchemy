@@ -79,7 +79,7 @@ class WifiDirectPeerManager(
                 addAction(WifiP2pManager.WIFI_P2P_THIS_DEVICE_CHANGED_ACTION)
             }
             if (Build.VERSION.SDK_INT >= 33) {
-                activity.registerReceiver(receiver, filter, Context.RECEIVER_NOT_EXPORTED)
+                activity.registerReceiver(receiver, filter, Context.RECEIVER_EXPORTED)
             } else {
                 @Suppress("DEPRECATION")
                 activity.registerReceiver(receiver, filter)
@@ -169,6 +169,7 @@ class WifiDirectPeerManager(
             override fun onFrame(frame: ByteArray) = listener.onFrame(frame)
             override fun onDisconnected() {
                 socketPublished.set(false)
+                socketEstablishing.set(false)
                 if (!closed) listener.onConnectionStateChanged(false)
             }
             override fun onError(error: IOException) {
