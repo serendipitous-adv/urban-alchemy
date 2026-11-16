@@ -6,6 +6,7 @@ stack. It does not send messages. Announcing is a separate explicit action.
 """
 
 import json
+import re
 import signal
 import threading
 from pathlib import Path
@@ -115,6 +116,58 @@ def start_runtime(storage_path, display_name="Urban Alchemy"):
             "public_info": public_info,
         }
         return json.dumps(public_info)
+
+
+
+def validate_contact_invite(invite_json):
+    """Validate a public UA invite against its Reticulum public key."""
+    try:
+        invite = json.loads(invite_json)
+    except Exception as exc:
+        raise ValueError("This is not a valid Urban Alchemy invite.") from exc
+
+    if not isinstance(invite, dict):
+        raise ValueError("Invite must be a JSON object.")
+    if invite.get("type") != "urban-alchemy-contact" or invite.get("version") != 1:
+        raise ValueError("Unsupported contact invite format.")
+
+    display_name = invite.get("display_name")
+    identity_hash = invite.get("reticulum_identity_hash")
+    public_key_hex = invite.get("reticulum_public_key")
+    destination_hex = invite.get("lxmf_destination")
+    player_id = invite.get("player_id")
+
+    if not isinstance(display_name, str) or not display_name.strip() or len(display_name.strip()) > 80:
+        raise ValueError("Invite has an invalid display name.")
+    if not isinstance(identity_hash, str) or not re.fullmatch(r"[0-9a-f]{32}", identity_hash):
+        raise ValueError("Invite has an invalid Reticulum identity hash.")
+    if not isinstance(public_key_hex, str) or not re.fullmatch(r"(?:[0-9a-f]{2}){64}", public_key_hex):
+        raise ValueError("Invite has an invalid Reticulum public key.")
+    if not isinstance(destination_hex, str) or not re.fullmatch(r"[0-9a-f]{32}", destination_hex):
+        raise ValueError("Invite has an invalid LXMF destination.")
+    if player_id is not None and (not isinstance(player_id, str) or len(player_id) > 80):
+        raise ValueError("Invite has an invalid Player ID.")
+
+    import RNS
+    public_identity = RNS.Identity(create_keys=False)
+    if not public_identity.load_public_key(bytes.fromhex(public_key_hex)):
+        raise ValueError("The Reticulum public key could not be loaded.")
+    if public_identity.hash.hex() != identity_hash:
+        raise ValueError("The public key does not match the stated Reticulum identity.")
+    expected_destination = RNS.Destination.hash(public_identity, "lxmf", "delivery").hex()
+    if expected_destination != destination_hex:
+        raise ValueError("The LXMF destination does not belong to this Reticulum identity.")
+
+    return json.dumps({
+        "type": "urban-alchemy-contact",
+        "version": 1,
+        "display_name": display_name.strip(),
+        "player_id": player_id,
+        "reticulum_identity_hash": identity_hash,
+        "reticulum_public_key": public_key_hex,
+        "lxmf_destination": destination_hex,
+        "verified": True,
+    }, separators=(",", ":"))
 
 
 def announce():
