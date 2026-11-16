@@ -32,6 +32,7 @@ import androidx.compose.ui.unit.dp
 fun WifiDirectPanel() {
     val activity = LocalContext.current as Activity
     val mainHandler = remember { Handler(Looper.getMainLooper()) }
+    val handshakeExecutor = remember { Executors.newSingleThreadExecutor() }
     val pinStore = remember(activity) { PeerIdentityPinStore(activity) }
     val localSigningPair = remember { DeviceIdentity.getSigningKeyPair() }
     val localBundle = remember { PeerIdentityBundle.fromPublicKey(localSigningPair.public).encode() }
@@ -54,14 +55,7 @@ fun WifiDirectPanel() {
             localSigningKeyPair = localSigningPair,
             pinnedPeerSigningKey = peer.signingPublicKey,
             replayGuard = SessionReplayGuard(activity.applicationContext),
-            sendFrame = { frame ->
-                Thread({
-                    try { transport.send(frame) }
-                    catch (error: Exception) {
-                        mainHandler.post { status = "Handshake send failed: ${error.message}" }
-                    }
-                }, "ua-handshake-writer").start()
-            },
+            sendFrame = { frame -> transport.send(frame) },
             onEstablished = {
                 mainHandler.post {
                     sessionReady = true
@@ -104,7 +98,7 @@ fun WifiDirectPanel() {
                 override fun onFrame(frame: ByteArray) {
                     val controller = handshake
                     if (controller != null && controller.state() != PeerSessionHandshakeController.State.ESTABLISHED) {
-                        controller.receiveFrame(frame)
+                        handshakeExecutor.execute { controller.receiveFrame(frame) }
                     } else {
                         mainHandler.post { status = "Received a UA frame; message handling is not connected yet." }
                     }
@@ -128,7 +122,7 @@ fun WifiDirectPanel() {
 
     DisposableEffect(manager) {
         manager?.let { runCatching { it.start() }.onFailure { managerError = it.message ?: "Could not start Wi-Fi Direct." } }
-        onDispose { handshake?.close(); manager?.close() }
+        onDispose { handshake?.close(); manager?.close(); handshakeExecutor.shutdownNow() }
     }
 
     val permission = if (Build.VERSION.SDK_INT >= 33) Manifest.permission.NEARBY_WIFI_DEVICES
@@ -162,11 +156,11 @@ fun WifiDirectPanel() {
             )
             Button(onClick = {
                 runCatching {
-                    val peer = pinStore.pin(peerBundleText)
+                    val peer = PeerIdentityBundle.decode(peerBundleText)
                     require(peer.fingerprint != SignedSessionHandshake.fingerprint(localSigningPair.public)) {
                         "You cannot pin your own identity."
                     }
-                    peer
+                    pinStore.pin(peerBundleText)
                 }.onSuccess { peer ->
                     pinnedPeer = peer
                     peerBundleText = ""
@@ -212,7 +206,7 @@ fun WifiDirectPanel() {
             if (transportReady) Text("Wi-Fi Direct socket connected · UA frame channel ready", style = MaterialTheme.typography.bodySmall)
             if (handshake != null && !sessionReady) {
                 Button(onClick = {
-                    runCatching { handshake?.begin() }
+                    runCatching { handshake?.let { controller -> handshakeExecutor.execute { controller.begin() } } }
                         .onSuccess { status = "Sending signed session offer..." }
                         .onFailure { status = it.message ?: "Could not start secure handshake." }
                 }, enabled = transportReady && pinnedPeer != null &&
