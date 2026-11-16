@@ -3,7 +3,7 @@ import unittest
 from ua_alpha.database import Database
 from ua_alpha.events import EventStore, SignedEvent
 from ua_alpha.identity import Persona, PersonaKeypair
-from ua_alpha.sync import SyncBatch, SyncEngine
+from ua_alpha.sync import SyncEngine
 from ua_alpha.transport import (
     PeerAddress, PeerSession, SyncAcknowledgement, SyncCoordinator, TransportError,
 )
@@ -18,7 +18,7 @@ class MemoryTransport:
 
     def exchange(self, address, batch):
         self.receiver.receive_once(self.receiver_session, batch)
-        return SyncAcknowledgement(peer_id=batch.peer_id, cursor=batch.cursor)
+        return SyncAcknowledgement(peer_id=self.receiver_session.local_peer_id, cursor=batch.cursor)
 
 
 class TransportContractTests(unittest.TestCase):
@@ -29,8 +29,8 @@ class TransportContractTests(unittest.TestCase):
         self.trust = {self.persona.persona_id: self.persona.public_key}
         self.a_store, self.b_store = EventStore(self.a_db), EventStore(self.b_db)
         self.a_engine, self.b_engine = SyncEngine(self.a_db), SyncEngine(self.b_db)
-        self.a_session = PeerSession("node-b", "internet", True, "session-a")
-        self.b_session = PeerSession("node-a", "internet", True, "session-b")
+        self.a_session = PeerSession("node-b", "internet", True, "session-a", "node-a")
+        self.b_session = PeerSession("node-a", "internet", True, "session-b", "node-b")
         self.a = SyncCoordinator(self.a_engine, self.trust)
         self.b = SyncCoordinator(self.b_engine, self.trust)
 
@@ -56,7 +56,7 @@ class TransportContractTests(unittest.TestCase):
         self.assertEqual(self.a_engine.cursor("node-b", "send"), event.event_id)
 
     def test_unauthenticated_session_is_rejected(self):
-        bad = PeerSession("node-b", "internet", False, "session-a")
+        bad = PeerSession("node-b", "internet", False, "session-a", "node-a")
         with self.assertRaises(TransportError):
             self.a.send_once(
                 bad, MemoryTransport(self.b, self.b_session),
