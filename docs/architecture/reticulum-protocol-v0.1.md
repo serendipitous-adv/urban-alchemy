@@ -603,6 +603,34 @@ Federation MUST NOT automatically merge identities, memberships, reputations, SC
 No federation, directory, steward, or UA operator gains unilateral authority over a participating community merely by facilitating discovery, coordination, or shared services. Communities MAY form federations of federations, but these arrangements remain voluntary and non-hierarchical; they do not create a protocol-level sovereign.
 
 
+
+### 13.4 Federation visibility and community index — accepted design direction
+
+UA clients SHOULD provide a player-facing index of Guilds and Patches that have intentionally published their participation in one or more federation relationships.
+
+1. Federation participation MUST NOT automatically imply public listing. Each community controls whether its identity, federation relationships, service descriptors, and other metadata are published, and at what discovery visibility level.
+2. The index MUST distinguish a verified, signed federation relationship from an unverified listing, recommendation, or claim. It MUST show the source and freshness of relationship assertions where available.
+3. Index inclusion MUST NOT confer authority, membership, endorsement, or access. Discovery and authorization remain separate.
+4. A community MAY publish a limited descriptor for discovery while withholding its location, membership roster, private services, or other sensitive metadata.
+5. Indexes MAY be hosted by independent nodes and may exchange signed, selectively published records. No global index is required, and omission from any index MUST NOT imply that a community or federation does not exist.
+6. Players SHOULD be able to navigate from a listed community to the federation relationships and services that community has chosen to expose, subject to access controls.
+
+### 13.5 Geographic map and place layer — design direction, implementation open
+
+UA SHOULD eventually support an open-source, decentralized map interface for exploring voluntarily published Patches, Guild locations, gathering places, quests, routes, and other points of interest.
+
+The map is a client/application feature, not a central authority or mandatory network service. It MUST respect the same selective-discovery, consent, and data-minimization rules as other UA services.
+
+- Geographic publication MUST be independently controlled from Guild creation, federation membership, and directory listing.
+- Communities and participants MAY publish approximate, generalized, time-limited, or no location at all.
+- Sensitive, private, temporary, or participant-specific locations MUST NOT become public merely because they are associated with a quest, Patch, or federation.
+- Map records SHOULD carry provenance, update time, visibility policy, and expiry or review information where appropriate.
+- Clients SHOULD support offline access to previously authorized map data and incremental synchronization over Reticulum.
+- The protocol MUST NOT require a single authoritative map provider, tile server, geocoder, or cloud backend.
+
+The suitability of existing open-source mapping and situational-awareness projects, including TAK/ATAK-related software, is an implementation research question. UA MUST NOT assume compatibility with TAK data formats, plugins, or network services until those interfaces and their licensing and security implications are evaluated. TAK is a potential client/interface or interoperability reference, not a required architectural dependency.
+
+
 ### 13.1 Community autonomy and protocol-level governance boundaries — accepted design direction
 
 UA MUST define shared interoperability, security, and minimum privacy requirements without imposing a universal constitution or a single political structure on every Guild or Patch.
@@ -702,6 +730,9 @@ The prototype is accepted only when the following tests pass:
 
 28. Two or more communities can establish, verify, scope, revise, and terminate a voluntary federation agreement; no agreement grants a federation or intermediary unilateral authority over a participating community, and no membership, reputation, SCAF, or governance rights transfer implicitly.
 
+29. A community can selectively publish or withhold its federation listing and geographic metadata independently; clients distinguish verified federation agreements from unverified claims, and map/index discovery never grants membership or access.
+30. A prototype can render and synchronize a small set of signed, visibility-controlled geographic records offline, without requiring a central map provider or exposing unpublished locations.
+
 ## 18. Phase 0 open questions
 
 These remain deliberately unresolved until research or prototype evidence is available:
@@ -725,7 +756,9 @@ These remain deliberately unresolved until research or prototype evidence is ava
 - Storage encryption and secure key storage per platform.
 - Service admission, rate limiting, and anti-spam policy.
 - Exact RNS/LXMF dependency versions and compatibility matrix.
-- Geographic object and privacy model.
+- Geographic object and privacy model, including approximate/private/time-limited locations, offline map data, and independent publication controls.
+- Federation index record schema, verification/freshness semantics, and selective publication.
+- Open-source mapping client and TAK/ATAK interoperability research, including licenses, APIs, data formats, and operational security.
 
 ## 19. Phase 0 exit criteria
 
@@ -769,6 +802,8 @@ No production application implementation should begin until the Phase 0 exit cri
 | D-021 | Permissionless Guild and Patch creation; directories aid discovery but do not confer legitimacy or determine existence | Accepted |
 | D-022 | Guilds and Patches establish self-generated cryptographic identities with stable key-derived identifiers, mutable non-unique names, and verifiable signed genesis records | Accepted design direction |
 | D-023 | Guilds and Patches may form voluntary, scoped, non-hierarchical federations without surrendering community sovereignty or implicitly transferring membership, reputation, SCAF, or governance authority | Accepted design direction |
+| D-024 | Federation does not automatically transfer individual membership; players may discover intentionally published federation relationships through a selective community index | Accepted design direction |
+| D-025 | UA should develop an open-source, decentralized map layer with independently controlled geographic publication; TAK/ATAK is a research candidate, not a required dependency | Accepted design direction
 
 ## 21. Research references
 
