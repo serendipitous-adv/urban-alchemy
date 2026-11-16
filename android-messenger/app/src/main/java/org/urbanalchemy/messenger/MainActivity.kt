@@ -139,6 +139,32 @@ class MainActivity : ComponentActivity() {
                                 }
                             },
                             onBack = { showContacts = false },
+                            onValidateInvite = { rawInvite, complete ->
+                                lifecycleScope.launch {
+                                    try {
+                                        val validated = withContext(Dispatchers.IO) {
+                                            if (!Python.isStarted()) Python.start(AndroidPlatform(applicationContext))
+                                            Python.getInstance().getModule("transport_probe")
+                                                .callAttr("validate_contact_invite", rawInvite)
+                                                .toString()
+                                        }
+                                        complete(validated, null)
+                                    } catch (error: Exception) {
+                                        complete(null, error.message ?: "This invite could not be verified.")
+                                    }
+                                }
+                            },
+                            onSaveVerifiedInvite = { inviteJson ->
+                                val invite = JSONObject(inviteJson)
+                                store.addVerifiedContact(
+                                    invite.getString("display_name"),
+                                    invite.getString("lxmf_destination"),
+                                    invite.getString("reticulum_identity_hash"),
+                                    invite.getString("reticulum_public_key"),
+                                    invite.optString("player_id").takeIf { it.isNotBlank() && it != "null" }
+                                )
+                                contacts = store.listContacts()
+                            },
                             onAddContact = { name, address ->
                                 store.addContact(name, address)
                                 contacts = store.listContacts()
@@ -493,11 +519,16 @@ private fun ContactsScreen(
     contacts: List<Contact>,
     onShareInvite: () -> Unit,
     onBack: () -> Unit,
+    onValidateInvite: (String, (String?, String?) -> Unit) -> Unit,
+    onSaveVerifiedInvite: (String) -> Unit,
     onAddContact: (String, String) -> Unit,
     onStartConversation: (String) -> Unit
 ) {
     var name by remember { mutableStateOf("") }
     var address by remember { mutableStateOf("") }
+    var inviteText by remember { mutableStateOf("") }
+    var validatedInvite by remember { mutableStateOf<String?>(null) }
+    var validating by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
 
     LazyColumn(
@@ -512,6 +543,64 @@ private fun ContactsScreen(
                 "Add people to your address book. Share your invite so others can add you.",
                 style = MaterialTheme.typography.bodySmall
             )
+        }
+        item {
+            Card(modifier = Modifier.fillMaxWidth()) {
+                Column(
+                    modifier = Modifier.fillMaxWidth().padding(14.dp),
+                    verticalArrangement = Arrangement.spacedBy(9.dp)
+                ) {
+                    Text("Add from invite", style = MaterialTheme.typography.titleMedium)
+                    Text(
+                        "Paste the contact invite someone shared with you. The public key and LXMF address are checked before saving.",
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                    OutlinedTextField(
+                        value = inviteText,
+                        onValueChange = { inviteText = it; validatedInvite = null; error = null },
+                        label = { Text("Paste contact invite") },
+                        modifier = Modifier.fillMaxWidth(),
+                        minLines = 3,
+                        maxLines = 6
+                    )
+                    Button(
+                        onClick = {
+                            validating = true
+                            error = null
+                            validatedInvite = null
+                            onValidateInvite(inviteText) { result, failure ->
+                                validating = false
+                                validatedInvite = result
+                                error = failure
+                            }
+                        },
+                        enabled = inviteText.isNotBlank() && !validating,
+                        modifier = Modifier.fillMaxWidth()
+                    ) { Text(if (validating) "Checking invite..." else "Verify invite") }
+                    if (validatedInvite != null) {
+                        val verified = JSONObject(validatedInvite!!)
+                        Text("Verified contact", style = MaterialTheme.typography.titleSmall)
+                        Text(verified.getString("display_name"), style = MaterialTheme.typography.titleMedium)
+                        Text("LXMF · ${verified.getString("lxmf_destination")}", style = MaterialTheme.typography.bodySmall)
+                        Button(
+                            onClick = {
+                                try {
+                                    onSaveVerifiedInvite(validatedInvite!!)
+                                    inviteText = ""
+                                    validatedInvite = null
+                                    error = null
+                                } catch (exception: Exception) {
+                                    error = exception.message ?: "Could not save contact."
+                                }
+                            },
+                            modifier = Modifier.fillMaxWidth()
+                        ) { Text("Add verified contact") }
+                    }
+                    if (error != null) {
+                        Text(error!!, color = MaterialTheme.colorScheme.error)
+                    }
+                }
+            }
         }
         item {
             Card(modifier = Modifier.fillMaxWidth()) {
