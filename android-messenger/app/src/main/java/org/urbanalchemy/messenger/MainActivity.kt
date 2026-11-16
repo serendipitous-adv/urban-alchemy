@@ -619,7 +619,7 @@ private fun ChatScreen(
                         draft = ""
                     }
                 },
-                enabled = draft.isNotBlank() && hasValidRecipient
+                enabled = draft.isNotBlank()
             ) { Text(if (hasValidRecipient) "Send" else "Save note") }
         }
         if (!hasValidRecipient) {
