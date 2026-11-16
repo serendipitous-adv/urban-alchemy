@@ -2,7 +2,7 @@ name: Backend checks
 
 on:
   push:
-    branches: ["feat/alpha-foundation", "feat/lxmf-live-messenger"]
+    branches: ["feat/alpha-foundation", "feat/lxmf-live-messenger", "fix/lxmf-identity-persistence"]
   pull_request:
     branches: ["dev"]
 
