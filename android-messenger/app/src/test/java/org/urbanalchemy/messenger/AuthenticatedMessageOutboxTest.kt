@@ -2,6 +2,7 @@ package org.urbanalchemy.messenger
 
 import android.content.Context
 import android.content.ContextWrapper
+import android.database.sqlite.SQLiteConstraintException
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertThrows
@@ -75,7 +76,7 @@ class AuthenticatedMessageOutboxTest {
     @Test fun duplicateMessageIdCannotBeEnqueuedTwice() {
         val message = signedMessage()
         pipeline.enqueue(message)
-        assertThrows(IllegalStateException::class.java) { pipeline.enqueue(message) }
+        assertThrows(SQLiteConstraintException::class.java) { pipeline.enqueue(message) }
         assertEquals(1, pipeline.list().size)
     }
 
