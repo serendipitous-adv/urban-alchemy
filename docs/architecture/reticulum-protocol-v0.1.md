@@ -210,6 +210,24 @@ Challenge windows and recognition timelines MUST be defined by the relevant Guil
 
 The exact notification mechanism, evidence requirements, challenge procedures, and dispute-resolution process remain open for Phase 1 threat modeling and community-policy design.
 
+### 6.3.4 Persona continuity and compromised everyday key — accepted design direction
+
+UA MUST preserve the application-level persona as the stable social identity when an everyday persona signing key is compromised and a valid recovery path is available. Recovery SHOULD rotate the persona's active signing authority rather than require the participant to abandon the persona and create a socially unrelated identity.
+
+This requirement is defined at the UA persona layer; it MUST NOT be interpreted as requiring the underlying RNS cryptographic identity to retain the same key material. An RNS identity is cryptographically bound to its key material. Where the RNS identity key itself is compromised or cannot safely be retained, the participant MUST create fresh RNS key material and a new RNS identity/destination as required by RNS.
+
+The UA persona continuity mechanism MUST therefore support:
+1. A stable, opaque UA persona identifier that is distinct from any one RNS identity/key.
+2. A signed key-transition or recovery statement, authorized by the persona recovery process, binding the stable persona identifier to the replacement active key and new RNS identity/destination.
+3. Explicit identification of the superseded key/identity and the effective transition sequence or version.
+4. Verification by peers that the replacement key is authorized for the same UA persona, without implying that the old private key has been recovered.
+5. Selective disclosure of continuity proofs; the protocol MUST NOT create a public cross-persona or master-identity directory as a side effect.
+6. Community-specific recognition of the rotated key. Membership, reputation, governance rights, and ledger authority remain subject to the relevant community or record authority's policy.
+
+A normal rotation MAY be authorized by the current persona key. A compromise/loss recovery MUST use the persona recovery procedure in Sections 6.3.1–6.3.3. If both the everyday and recovery keys are suspected compromised, the claim MUST be treated as disputed and evaluated under the relevant community policy; possession of either compromised key alone MUST NOT be treated as conclusive proof of rightful control.
+
+Implementations MUST retain historical signatures and provenance under the keys that originally produced them. Key rotation changes future signing authority; it MUST NOT rewrite or invalidate historical records merely because the active key changed.
+
 ### 6.4 Identity, persona, membership, and reputation
 
 These are separate concepts:
@@ -517,6 +535,7 @@ The prototype is accepted only when the following tests pass:
 17. The prototype documents which operations are unavailable while disconnected and how unresolved conflicts are represented.
 18. A valid persona recovery-key signature initiates a recorded pending/disputed recovery claim; it does not automatically erase the prior persona or force community recognition. A compromised recovery key can be revoked and replaced by a separately signed master-authorized event when the master key is available.
 19. Recovery challenge windows and temporary restrictions are applied according to the relevant community/record authority's published policy, without a universal network-wide delay.
+20. Compromise recovery preserves the stable UA persona identifier while binding it to fresh RNS key material/identity where necessary; historical signatures remain verifiable under their original keys.
 
 ## 18. Phase 0 open questions
 
@@ -527,6 +546,7 @@ These remain deliberately unresolved until research or prototype evidence is ava
 - Exact service descriptor schema.
 - Exact trusted-network discovery and invitation wire formats.
 - Recovery manifest format and community recovery policies.
+- Stable UA persona identifier and key-transition statement schema, including RNS identity replacement semantics.
 - Event identifier construction and canonicalization.
 - Synchronization summary/anti-entropy algorithm.
 - Storage encryption and secure key storage per platform.
@@ -565,6 +585,7 @@ No production application implementation should begin until the Phase 0 exit cri
 | D-010 | MVP master-key protection uses independent offline backups; threshold/social recovery is deferred | Accepted |
 | D-011 | A persona recovery-key signature initiates a recovery claim; replacement and community recognition are not automatic | Accepted |
 | D-012 | Recovery challenge windows and recognition timelines are community-defined; no universal protocol-wide delay | Accepted |
+| D-013 | Preserve the stable UA persona through key rotation/recovery; replace compromised RNS key material and bind fresh RNS identity to the same persona where required | Accepted design direction |
 
 ## 21. Research references
 
