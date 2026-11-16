@@ -4,6 +4,7 @@ import android.os.Bundle
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
+import android.content.Intent
 import android.net.wifi.WifiManager
 import org.json.JSONObject
 import com.chaquo.python.android.AndroidPlatform
@@ -96,6 +97,25 @@ class MainActivity : ComponentActivity() {
                         )
                         showContacts -> ContactsScreen(
                             contacts = contacts,
+                            onShareInvite = {
+                                lifecycleScope.launch {
+                                    try {
+                                        val invite = withContext(Dispatchers.IO) {
+                                            if (!Python.isStarted()) Python.start(AndroidPlatform(applicationContext))
+                                            Python.getInstance().getModule("transport_probe")
+                                                .callAttr("create_contact_invite", "Urban Alchemy", uaIdentity.playerId)
+                                                .toString()
+                                        }
+                                        val sendIntent = Intent(Intent.ACTION_SEND).apply {
+                                            type = "text/plain"
+                                            putExtra(Intent.EXTRA_TEXT, invite)
+                                        }
+                                        startActivity(Intent.createChooser(sendIntent, "Share your Urban Alchemy contact invite"))
+                                    } catch (error: Exception) {
+                                        transportStatus = "Could not create invite: ${error.message ?: error.javaClass.simpleName}"
+                                    }
+                                }
+                            },
                             onBack = { showContacts = false },
                             onAddContact = { name, address ->
                                 store.addContact(name, address)
@@ -449,6 +469,7 @@ private fun MessengerHome(
 @Composable
 private fun ContactsScreen(
     contacts: List<Contact>,
+    onShareInvite: () -> Unit,
     onBack: () -> Unit,
     onAddContact: (String, String) -> Unit,
     onStartConversation: (String) -> Unit
@@ -466,7 +487,7 @@ private fun ContactsScreen(
             TextButton(onClick = onBack) { Text("‹ Conversations") }
             Text("Contacts", style = MaterialTheme.typography.headlineMedium)
             Text(
-                "Add an LXMF destination. Saved contacts are not cryptographically verified yet.",
+                "Add people to your address book. Share your invite so others can add you.",
                 style = MaterialTheme.typography.bodySmall
             )
         }
@@ -477,6 +498,9 @@ private fun ContactsScreen(
                     verticalArrangement = Arrangement.spacedBy(9.dp)
                 ) {
                     Text("Add contact", style = MaterialTheme.typography.titleMedium)
+                    Button(onClick = onShareInvite, modifier = Modifier.fillMaxWidth()) {
+                        Text("Share my contact invite")
+                    }
                     OutlinedTextField(
                         value = name,
                         onValueChange = { name = it; error = null },
