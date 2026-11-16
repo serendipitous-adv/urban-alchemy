@@ -134,7 +134,7 @@ class PeerMessageProtocol(
         val updated = outbox.acknowledgeVerified(
             acknowledgement, localFingerprint, pinnedPeerSigningPublicKey, nowMillis()
         )
-        updated?.let(onDeliveryUpdated)
+        onDeliveryUpdated(updated)
     }
 
     private fun checkActive() { check(!closed) { "Peer message protocol is closed." } }
