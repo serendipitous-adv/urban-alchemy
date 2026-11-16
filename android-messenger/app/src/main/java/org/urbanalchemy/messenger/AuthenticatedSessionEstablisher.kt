@@ -4,9 +4,9 @@ import java.security.KeyPair
 import java.security.PublicKey
 
 /**
- * Verifies both pinned-peer offers, consumes their replay IDs, and only then
- * derives the ephemeral session key. Callers must close the returned session
- * when the conversation session ends.
+ * Verifies both pinned-peer offers, consumes their replay IDs, and derives the
+ * session key using only this device's ephemeral private key. The peer's
+ * ephemeral private key is never available to or required by this device.
  */
 class AuthenticatedSessionEstablisher(private val replayGuard: SessionReplayGuard) {
 
@@ -36,15 +36,16 @@ class AuthenticatedSessionEstablisher(private val replayGuard: SessionReplayGuar
 
     /**
      * Offers are ordered by role, not by local perspective. Both signing keys
-     * must already be pinned to fingerprints verified out of band.
+     * must already be pinned to fingerprints verified out of band. Only the
+     * local ephemeral key pair is accepted; the peer contributes a public key
+     * in its signed offer.
      */
     fun establish(
         initiatorOffer: SignedSessionHandshake.Offer,
         responderOffer: SignedSessionHandshake.Offer,
         initiatorSigningKey: PublicKey,
         responderSigningKey: PublicKey,
-        initiatorEphemeralKeyPair: KeyPair,
-        responderEphemeralKeyPair: KeyPair,
+        localEphemeralKeyPair: KeyPair,
         nowEpochMillis: Long,
         localIsInitiator: Boolean
     ): EstablishedSession {
@@ -63,9 +64,8 @@ class AuthenticatedSessionEstablisher(private val replayGuard: SessionReplayGuar
         )
         val transcript = SessionKeyAgreement.Transcript(verifiedInitiator, verifiedResponder)
 
-        val localEphemeral = if (localIsInitiator) initiatorEphemeralKeyPair else responderEphemeralKeyPair
         val localOffer = if (localIsInitiator) verifiedInitiator else verifiedResponder
-        require(localOffer.ephemeralPublicKey.encoded.contentEquals(localEphemeral.public.encoded)) {
+        require(localOffer.ephemeralPublicKey.encoded.contentEquals(localEphemeralKeyPair.public.encoded)) {
             "Local ephemeral key does not match the local signed offer."
         }
 
@@ -77,7 +77,7 @@ class AuthenticatedSessionEstablisher(private val replayGuard: SessionReplayGuar
             "Responder session offer has already been accepted."
         }
 
-        val key = SessionKeyAgreement.deriveSessionKey(localEphemeral, transcript, localIsInitiator)
+        val key = SessionKeyAgreement.deriveSessionKey(localEphemeralKeyPair, transcript, localIsInitiator)
         return try {
             EstablishedSession(
                 sessionId = verifiedInitiator.sessionId,
