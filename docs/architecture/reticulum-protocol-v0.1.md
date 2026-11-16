@@ -565,6 +565,22 @@ A Guild may participate in multiple Patches; a Patch may contain or connect mult
 
 Membership, governance, and access policies are community-defined. UA MUST NOT require a central organization to approve the creation of a Guild or Patch.
 
+
+### 13.1 Community autonomy and protocol-level governance boundaries — accepted design direction
+
+UA MUST define shared interoperability, security, and minimum privacy requirements without imposing a universal constitution or a single political structure on every Guild or Patch.
+
+1. Guilds define their own membership, internal governance, roles, decision procedures, and community policies.
+2. Patches define their own local participation, coordination, and place-based policies, subject to the autonomy of participants and other communities.
+3. Communities MAY adopt shared governance templates, protocols, or mutual agreements. Adoption MUST be voluntary unless a community has explicitly entered a binding agreement with another party.
+4. UA protocol requirements govern technical interoperability, message validity, security boundaries, and the minimum protections necessary for compatible operation; they MUST NOT silently prescribe a universal internal governance model.
+5. No central UA operator, directory, steward, or protocol maintainer has unilateral authority to override a Guild's or Patch's internal decisions merely by virtue of operating infrastructure or publishing software.
+6. A community's autonomy does not authorize it to forge another community's records, impersonate participants, bypass cryptographic authorization, or claim control over nodes and data it does not govern.
+7. Cross-community disputes and shared-resource arrangements SHOULD be handled through explicit agreements and mutually recognized procedures, not presumed central jurisdiction.
+8. Implementations MUST distinguish protocol conformance from community legitimacy: a technically valid message does not make a community decision legitimate under that community's own rules.
+
+The governing principle is **common protocol, plural governance**: shared technical rules enable cooperation while communities retain authority over their own internal arrangements.
+
 ## 14. Security and privacy requirements
 
 The protocol MUST account for:
@@ -645,6 +661,7 @@ The prototype is accepted only when the following tests pass:
 24. A persona can be used across communities and carry selectively disclosed, verifiable portable records, while Guild/Patch membership, private data, reputation, SCAF, and other local authority remain subject to the originating and receiving communities' policies.
 25. Portable activity/contribution evidence retains issuer and context, while receiving communities independently interpret it; the system does not create a universal reputation score or automatically transfer local reputation judgments.
 26. A participant can delete locally controlled personal data and withdraw optional/future disclosures; nodes distinguish local deletion, cessation of replication, access restriction, and retained signed history, without promising global erasure.
+27. Interoperability and security rules are enforced at the protocol boundary while Guilds and Patches define their own governance; shared templates are voluntary and no central UA operator can unilaterally override community decisions.
 
 ## 18. Phase 0 open questions
 
@@ -662,6 +679,7 @@ These remain deliberately unresolved until research or prototype evidence is ava
 - Portable credential and record formats, provenance, revocation checking, and participant-controlled export/import semantics across communities.
 - Portable reputation-evidence schemas, issuer attribution, revocation/expiry, selective presentation, and protections against global scoring or context collapse.
 - Data classification, retention schedules, deletion/withdrawal propagation, tombstone semantics, and policy/legal constraints for distributed records.
+- Governance interoperability: representation of community constitutions/policies, explicit cross-community agreements, and dispute procedures without introducing a central override authority.
 - Event identifier construction and canonicalization.
 - Synchronization summary/anti-entropy algorithm.
 - Storage encryption and secure key storage per platform.
@@ -707,6 +725,7 @@ No production application implementation should begin until the Phase 0 exit cri
 | D-017 | Persona identity and selectively disclosed verifiable records are portable; community membership, private data, reputation, SCAF, and other authority do not transfer automatically | Accepted design direction |
 | D-018 | Reputation evidence may be selectively portable with provenance; reputation judgments remain local to each community, with no universal score or automatic transfer | Accepted design direction |
 | D-019 | Participants control personal data and future disclosure; distributed signed records may persist under purpose-limited published retention policies, and global erasure is not promised | Accepted design direction |
+| D-020 | Common interoperability/security protocol with plural, autonomous Guild and Patch governance; shared templates are voluntary and no central UA authority has unilateral override power | Accepted design direction |
 
 ## 21. Research references
 
