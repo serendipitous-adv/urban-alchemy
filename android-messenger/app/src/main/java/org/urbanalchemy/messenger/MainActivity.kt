@@ -418,8 +418,8 @@ private fun MessengerHome(
                         }
                         if (showIdentityDetails) {
                             Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {
-                                Text("Player · \${playerId.take(8)}…", style = MaterialTheme.typography.bodyMedium)
-                                Text("This device · \${nodeId.take(8)}…", style = MaterialTheme.typography.bodyMedium)
+                                Text("Player · ${playerId.take(8)}…", style = MaterialTheme.typography.bodyMedium)
+                                Text("This device · ${nodeId.take(8)}…", style = MaterialTheme.typography.bodyMedium)
                                 androidx.compose.material3.HorizontalDivider()
                                 Text("Android device-key fingerprint", style = MaterialTheme.typography.labelMedium)
                                 Text(fingerprint, style = MaterialTheme.typography.bodySmall)
