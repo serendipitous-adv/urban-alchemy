@@ -40,7 +40,9 @@ The SQLite file defaults to `backend/urban-alchemy.sqlite3` when started from th
 - The local event store is append-only and deduplicates by event ID.
 - The transport-neutral sync engine exports bounded event batches, requires explicit acknowledgement before advancing outbound cursors, verifies the authenticated peer's trusted persona keys on receipt, and atomically stores received events with the receive cursor.
 - Sync cursors are durable per peer and direction. Repeated batches are safe; malformed, unordered, oversized, untrusted, or cursor-regressing batches are rejected.
-- The sync engine does not authenticate the peer connection, exchange trust, grant membership, resolve domain conflicts, or open a network connection. Reticulum and internet adapters must provide authenticated peer context and use the same engine.
+- A shared transport contract now separates peer synchronization from network specifics. Its coordinator requires an authenticated peer session, checks transport/address consistency, and advances outbound cursors only after a matching durable-receipt acknowledgement.
+- The transport contract is not itself a live network adapter. Reticulum and internet implementations still need to supply real authenticated sessions, framing, encryption, reconnect behavior, and delivery acknowledgements.
+- The sync engine does not exchange trust, grant membership, or resolve domain conflicts. Peer invitations and persistent trust scopes remain a separate layer.
 - Reticulum identity binding, WebAuthn/passkey login, secure key storage, offline master recovery, and recovery challenges are separate future layers.
 - These primitives are transport-independent: the same signed UA event can be carried over Reticulum, an internet relay, removable media, or another authorized transport.
 
