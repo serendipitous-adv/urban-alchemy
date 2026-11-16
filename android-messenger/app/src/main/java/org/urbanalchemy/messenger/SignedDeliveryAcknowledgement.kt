@@ -115,23 +115,3 @@ data class SignedDeliveryAcknowledgement(
     }
 }
 
-/** Applies a receipt only after its signature and pinned identity have been verified. */
-fun PersistentOutbox.acknowledgeVerified(
-    acknowledgement: SignedDeliveryAcknowledgement,
-    originalSenderFingerprint: String,
-    recipientSigningPublicKey: PublicKey,
-    nowEpochMillis: Long
-): OutboxRecord {
-    val record = list().firstOrNull { it.messageId == acknowledgement.messageId }
-        ?: error("Outbox message not found.")
-    val verified = SignedDeliveryAcknowledgement.verify(
-        acknowledgement = acknowledgement,
-        expectedMessageId = record.messageId,
-        expectedOriginalSenderFingerprint = originalSenderFingerprint,
-        expectedRecipientFingerprint = record.recipientIdentity,
-        recipientSigningPublicKey = recipientSigningPublicKey,
-        nowEpochMillis = nowEpochMillis,
-        messageCreatedAtEpochMillis = record.createdAtEpochMillis
-    )
-    return acknowledge(verified)
-}
