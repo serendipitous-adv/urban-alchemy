@@ -45,6 +45,11 @@ import java.text.DateFormat
 import java.util.Date
 
 class MainActivity : ComponentActivity() {
+    companion object {
+        // Static for the lifetime of this Android process: Activity recreation must
+        // not turn active messages into uncertain ones a second time.
+        @Volatile private var processRecoveryCompleted = false
+    }
     private var reticulumMulticastLock: WifiManager.MulticastLock? = null
 
     private fun acquireReticulumMulticastLock() {
@@ -176,6 +181,12 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val store = LocalStore(this)
+        synchronized(MainActivity::class.java) {
+            if (!processRecoveryCompleted) {
+                store.markInFlightDeliveryUnknown()
+                processRecoveryCompleted = true
+            }
+        }
         val identity = DeviceIdentity.getOrCreate()
         val uaIdentity = store.getOrCreateUaIdentity()
         setContent {
@@ -866,6 +877,7 @@ private fun ChatScreen(
                                     "WAITING_FOR_ROUTE" -> "waiting for route"
                                     "WAITING_FOR_IDENTITY" -> "discovering recipient"
                                     "SUBMITTED" -> "submitted to LXMF"
+                                    "DELIVERY_UNKNOWN" -> "delivery status unknown · not resent"
                                     "SENT" -> "sent · awaiting delivery proof"
                                     "DELIVERED" -> "delivered"
                                     "FAILED" -> "failed · retained locally"

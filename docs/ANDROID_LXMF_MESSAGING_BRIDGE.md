@@ -75,3 +75,8 @@ No existing preview installation, app-private database, Reticulum identity or
 signing key is modified by this branch. Do not uninstall the installed preview
 to test it. Release signing and the first stable-install data migration remain
 separate blockers.
+
+
+### Process-restart delivery recovery
+
+Outbound messages are persisted before LXMF submission. A submitted message is not automatically resent after an Android process restart: the Python bridge's LXMF callback objects are process-local, and a lost callback does not prove that the peer failed to receive the message. On the first database open in each Android process, records left in `SUBMITTED` or `SENT` are changed to `DELIVERY_UNKNOWN`. The original encrypted message remains in history and is excluded from the automatic outbox retry query. The UI must describe this as uncertain, never as delivered. Manual reconciliation/retry requires a separate explicit user action and should warn about possible duplicates.

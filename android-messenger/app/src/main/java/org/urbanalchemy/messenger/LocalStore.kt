@@ -380,9 +380,22 @@ class LocalStore(context: Context) : SQLiteOpenHelper(context, "ua_messenger.db"
         return result
     }
 
+    /**
+     * Called once when a new Android process opens this database. LXMF callbacks
+     * live in the Python process, so SUBMITTED/SENT records from an older process
+     * cannot safely be called delivered or automatically resent.
+     */
+    @Synchronized
+    fun markInFlightDeliveryUnknown(): Int {
+        val values = ContentValues().apply { put("status", "DELIVERY_UNKNOWN") }
+        return writableDatabase.update(
+            "messages", values, "status IN ('SUBMITTED', 'SENT')", null
+        )
+    }
+
     @Synchronized
     fun updateOutbound(id: String, status: String, lxmfHash: String? = null) {
-        val allowed = setOf("QUEUED", "WAITING_FOR_ROUTE", "WAITING_FOR_IDENTITY", "SUBMITTED", "SENT", "DELIVERED", "FAILED", "REJECTED")
+        val allowed = setOf("QUEUED", "WAITING_FOR_ROUTE", "WAITING_FOR_IDENTITY", "SUBMITTED", "SENT", "DELIVERED", "FAILED", "REJECTED", "DELIVERY_UNKNOWN")
         require(status in allowed) { "Unsupported message state." }
         val values = ContentValues().apply {
             put("status", status)
