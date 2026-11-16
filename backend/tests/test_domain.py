@@ -44,8 +44,23 @@ class QuestLedgerTests(unittest.TestCase):
 
     def test_one_attempt_per_player_per_quest(self):
         self.ua.accept_quest(self.quest, self.player)
-        with self.assertRaises(Exception):
+        with self.assertRaises(DomainError):
             self.ua.accept_quest(self.quest, self.player)
+
+    def test_published_versions_are_immutable(self):
+        with self.assertRaises(Exception):
+            self.db.connection.execute("UPDATE quest_versions SET title = 'tampered' WHERE id = ?", (self.v1,))
+        with self.assertRaises(Exception):
+            self.db.connection.execute("DELETE FROM quest_versions WHERE id = ?", (self.v1,))
+
+    def test_ledger_is_append_only(self):
+        attempt = self.ua.accept_quest(self.quest, self.player)
+        self.ua.complete_quest(attempt, self.player)
+        entry_id = self.ua.ledger(self.player)[0]["id"]
+        with self.assertRaises(Exception):
+            self.db.connection.execute("UPDATE ledger_entries SET amount = 999 WHERE id = ?", (entry_id,))
+        with self.assertRaises(Exception):
+            self.db.connection.execute("DELETE FROM ledger_entries WHERE id = ?", (entry_id,))
 
     def test_rewards_are_fixed_at_ten_and_five(self):
         row = self.db.connection.execute(
