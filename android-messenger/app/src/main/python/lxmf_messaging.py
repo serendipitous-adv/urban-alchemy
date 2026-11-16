@@ -141,10 +141,23 @@ def send_message(recipient_hex, text, client_message_id):
     })
 
 
-def drain_events(limit=100):
-    """Return and remove queued LXMF events; caller must persist before display."""
+def peek_events(limit=100):
+    """Read pending events without deleting them; Android acknowledges after DB commit."""
     limit = max(1, min(int(limit), 500))
     with _lock:
-        batch = _events[:limit]
-        del _events[:limit]
+        return json.dumps(_events[:limit])
+
+
+def ack_events(count):
+    """Remove only the prefix Android has successfully persisted."""
+    count = max(0, min(int(count), 500))
+    with _lock:
+        del _events[:count]
+        return len(_events)
+
+
+def drain_events(limit=100):
+    """Compatibility helper for diagnostics; production Android uses peek/ack."""
+    batch = json.loads(peek_events(limit))
+    ack_events(len(batch))
     return json.dumps(batch)
