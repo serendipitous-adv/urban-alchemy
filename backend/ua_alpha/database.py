@@ -58,6 +58,22 @@ CREATE TABLE IF NOT EXISTS ledger_entries (
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
     UNIQUE (attempt_id, entry_type)
 );
+CREATE TRIGGER IF NOT EXISTS quest_versions_no_update
+BEFORE UPDATE ON quest_versions BEGIN
+    SELECT RAISE(ABORT, 'published quest versions are immutable');
+END;
+CREATE TRIGGER IF NOT EXISTS quest_versions_no_delete
+BEFORE DELETE ON quest_versions BEGIN
+    SELECT RAISE(ABORT, 'published quest versions cannot be deleted');
+END;
+CREATE TRIGGER IF NOT EXISTS ledger_no_update
+BEFORE UPDATE ON ledger_entries BEGIN
+    SELECT RAISE(ABORT, 'ledger entries are append-only');
+END;
+CREATE TRIGGER IF NOT EXISTS ledger_no_delete
+BEFORE DELETE ON ledger_entries BEGIN
+    SELECT RAISE(ABORT, 'ledger entries are append-only');
+END;
 CREATE INDEX IF NOT EXISTS idx_versions_quest ON quest_versions(quest_id, version DESC);
 CREATE INDEX IF NOT EXISTS idx_attempts_player ON attempts(player_id, status);
 CREATE INDEX IF NOT EXISTS idx_ledger_player ON ledger_entries(player_id, created_at);
