@@ -584,6 +584,25 @@ Guilds and Patches establish their own cryptographic identities without registra
 
 The initial key, stable identifier, mutable display name, and signed genesis record provide a verifiable origin without creating a central namespace or approval process.
 
+
+### 13.3 Voluntary, non-hierarchical federation — accepted design direction
+
+Guilds and Patches MAY establish voluntary federation relationships with other communities. Federation is a set of explicit, scoped agreements between participating communities; it MUST NOT create a superior authority or imply that one community governs another.
+
+A federation agreement SHOULD identify:
+1. The participating community identifiers and the keys authorized to approve the agreement.
+2. Its scope, purpose, effective version, and any duration or exit conditions.
+3. The services, records, membership assertions, quests, resources, or coordination channels that each party agrees to expose.
+4. The authorization and disclosure rules applicable to shared information and cross-community actions.
+5. Any shared procedures for disputes, changes, suspension, and termination.
+
+Federation MUST be opt-in for each participating community and MUST be represented by verifiable records authorized under each community's own governance and key-management policies. A community MAY accept, reject, narrow, suspend, or leave an agreement according to its terms and its own governance.
+
+Federation MUST NOT automatically merge identities, memberships, reputations, SCAF balances, governance rights, or private records. Any cross-community recognition or resource exchange MUST be explicit and governed by the relevant agreement and record authorities.
+
+No federation, directory, steward, or UA operator gains unilateral authority over a participating community merely by facilitating discovery, coordination, or shared services. Communities MAY form federations of federations, but these arrangements remain voluntary and non-hierarchical; they do not create a protocol-level sovereign.
+
+
 ### 13.1 Community autonomy and protocol-level governance boundaries — accepted design direction
 
 UA MUST define shared interoperability, security, and minimum privacy requirements without imposing a universal constitution or a single political structure on every Guild or Patch.
@@ -681,6 +700,8 @@ The prototype is accepted only when the following tests pass:
 26. A participant can delete locally controlled personal data and withdraw optional/future disclosures; nodes distinguish local deletion, cessation of replication, access restriction, and retained signed history, without promising global erasure.
 27. Interoperability and security rules are enforced at the protocol boundary while Guilds and Patches define their own governance; shared templates are voluntary and no central UA operator can unilaterally override community decisions.
 
+28. Two or more communities can establish, verify, scope, revise, and terminate a voluntary federation agreement; no agreement grants a federation or intermediary unilateral authority over a participating community, and no membership, reputation, SCAF, or governance rights transfer implicitly.
+
 ## 18. Phase 0 open questions
 
 These remain deliberately unresolved until research or prototype evidence is available:
@@ -697,7 +718,7 @@ These remain deliberately unresolved until research or prototype evidence is ava
 - Portable credential and record formats, provenance, revocation checking, and participant-controlled export/import semantics across communities.
 - Portable reputation-evidence schemas, issuer attribution, revocation/expiry, selective presentation, and protections against global scoring or context collapse.
 - Data classification, retention schedules, deletion/withdrawal propagation, tombstone semantics, and policy/legal constraints for distributed records.
-- Governance interoperability: representation of community constitutions/policies, explicit cross-community agreements, and dispute procedures without introducing a central override authority.
+- Governance interoperability: representation of community constitutions/policies, explicit cross-community and federation agreements, and dispute procedures without introducing a central override authority.
 - Exact community identifier derivation, genesis-record schema, canonical encoding, and community key-rotation/recovery policy representation.
 - Event identifier construction and canonicalization.
 - Synchronization summary/anti-entropy algorithm.
@@ -747,6 +768,7 @@ No production application implementation should begin until the Phase 0 exit cri
 | D-020 | Common interoperability/security protocol with plural, autonomous Guild and Patch governance; shared templates are voluntary and no central UA authority has unilateral override power | Accepted design direction |
 | D-021 | Permissionless Guild and Patch creation; directories aid discovery but do not confer legitimacy or determine existence | Accepted |
 | D-022 | Guilds and Patches establish self-generated cryptographic identities with stable key-derived identifiers, mutable non-unique names, and verifiable signed genesis records | Accepted design direction |
+| D-023 | Guilds and Patches may form voluntary, scoped, non-hierarchical federations without surrendering community sovereignty or implicitly transferring membership, reputation, SCAF, or governance authority | Accepted design direction |
 
 ## 21. Research references
 
