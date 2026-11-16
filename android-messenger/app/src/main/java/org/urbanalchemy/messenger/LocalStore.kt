@@ -18,7 +18,11 @@ data class Contact(
     val id: String,
     val name: String,
     val destination: String,
-    val createdAt: Long
+    val createdAt: Long,
+    val identityHash: String? = null,
+    val publicKey: String? = null,
+    val playerId: String? = null,
+    val verified: Boolean = false
 )
 
 data class Conversation(
@@ -38,7 +42,7 @@ data class LocalMessage(
     val status: String
 )
 
-class LocalStore(context: Context) : SQLiteOpenHelper(context, "ua_messenger.db", null, 4) {
+class LocalStore(context: Context) : SQLiteOpenHelper(context, "ua_messenger.db", null, 5) {
     override fun onCreate(db: SQLiteDatabase) {
         db.execSQL(
             """CREATE TABLE contacts (
@@ -108,6 +112,12 @@ class LocalStore(context: Context) : SQLiteOpenHelper(context, "ua_messenger.db"
         }
         if (oldVersion < 4) {
             createUaIdentityTable(db)
+        }
+        if (oldVersion < 5) {
+            db.execSQL("ALTER TABLE contacts ADD COLUMN identity_hash TEXT")
+            db.execSQL("ALTER TABLE contacts ADD COLUMN public_key TEXT")
+            db.execSQL("ALTER TABLE contacts ADD COLUMN player_id TEXT")
+            db.execSQL("ALTER TABLE contacts ADD COLUMN verified INTEGER NOT NULL DEFAULT 0")
         }
     }
 
@@ -182,14 +192,52 @@ class LocalStore(context: Context) : SQLiteOpenHelper(context, "ua_messenger.db"
         return id
     }
 
+    @Synchronized
+    fun addVerifiedContact(name: String, destinationInput: String, identityHash: String, publicKey: String, playerId: String?): String {
+        val cleanName = name.trim()
+        val destination = destinationInput.trim().lowercase()
+        require(cleanName.isNotEmpty() && cleanName.length <= 80) { "Enter a valid contact name." }
+        require(Regex("^[0-9a-f]{32}$").matches(destination)) { "Invalid LXMF destination." }
+        require(Regex("^[0-9a-f]{32}$").matches(identityHash)) { "Invalid Reticulum identity hash." }
+        require(Regex("^(?:[0-9a-f]{2}){64}$").matches(publicKey)) { "Invalid Reticulum public key." }
+        val existing = readableDatabase.rawQuery(
+            "SELECT id, identity_hash, public_key FROM contacts WHERE destination = ?",
+            arrayOf(destination)
+        ).use { cursor ->
+            if (cursor.moveToFirst()) Triple(cursor.getString(0), cursor.getString(1), cursor.getString(2)) else null
+        }
+        if (existing != null) {
+            require(existing.second == identityHash && existing.third == publicKey) {
+                "This LXMF address is already saved with a different identity. No changes were made."
+            }
+            return existing.first
+        }
+        val id = UUID.randomUUID().toString()
+        val values = ContentValues().apply {
+            put("id", id)
+            put("name", cleanName)
+            put("destination", destination)
+            put("created_at", System.currentTimeMillis())
+            put("identity_hash", identityHash)
+            put("public_key", publicKey)
+            if (playerId == null) putNull("player_id") else put("player_id", playerId)
+            put("verified", 1)
+        }
+        writableDatabase.insertOrThrow("contacts", null, values)
+        return id
+    }
+
     fun listContacts(): List<Contact> {
         val result = mutableListOf<Contact>()
         readableDatabase.rawQuery(
-            "SELECT id, name, destination, created_at FROM contacts ORDER BY name COLLATE NOCASE",
+            "SELECT id, name, destination, created_at, identity_hash, public_key, player_id, verified FROM contacts ORDER BY name COLLATE NOCASE",
             null
         ).use { cursor ->
             while (cursor.moveToNext()) {
-                result += Contact(cursor.getString(0), cursor.getString(1), cursor.getString(2), cursor.getLong(3))
+                result += Contact(
+                    cursor.getString(0), cursor.getString(1), cursor.getString(2), cursor.getLong(3),
+                    cursor.getString(4), cursor.getString(5), cursor.getString(6), cursor.getInt(7) == 1
+                )
             }
         }
         return result
