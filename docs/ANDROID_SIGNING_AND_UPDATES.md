@@ -39,12 +39,10 @@ Set-Clipboard $b64
 ```
 
 In the repository's GitHub page, open **Settings → Secrets and variables → Actions**
-and create these repository secrets:
+and create these two repository secrets:
 
 - `ANDROID_KEYSTORE_BASE64`: paste the clipboard contents.
 - `ANDROID_KEYSTORE_PASSWORD`: the keystore password.
-- `ANDROID_KEY_ALIAS`: `urban-alchemy`.
-- `ANDROID_KEY_PASSWORD`: the key password.
 
 Do not put any password or keystore contents in a chat message, issue, commit, or
 workflow log. The workflow only restores the keystore on the ephemeral build
