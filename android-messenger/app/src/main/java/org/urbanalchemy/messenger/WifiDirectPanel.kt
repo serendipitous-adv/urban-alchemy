@@ -2,6 +2,9 @@ package org.urbanalchemy.messenger
 
 import android.Manifest
 import android.app.Activity
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
 import android.content.pm.PackageManager
 import android.net.wifi.p2p.WifiP2pDevice
 import android.os.Build
@@ -16,156 +19,207 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
+import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import java.util.concurrent.Executors
 
-/**
- * Minimal Wi-Fi Direct controls for exercising discovery and peer connection.
- * A connected socket is ready for UA protocol frames, but this panel does not
- * exchange identities or send chat messages yet.
- */
+/** Wi-Fi Direct connection and explicitly pinned UA session handshake controls. */
 @Composable
 fun WifiDirectPanel() {
     val activity = LocalContext.current as Activity
     val mainHandler = remember { Handler(Looper.getMainLooper()) }
+    val handshakeExecutor = remember { Executors.newSingleThreadExecutor() }
+    val pinStore = remember(activity) { PeerIdentityPinStore(activity) }
+    val localSigningPair = remember { DeviceIdentity.getSigningKeyPair() }
+    val localBundle = remember { PeerIdentityBundle.fromPublicKey(localSigningPair.public).encode() }
+    val clipboard = remember(activity) { activity.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager }
+
     var peers by remember { mutableStateOf(emptyList<WifiP2pDevice>()) }
     var status by remember { mutableStateOf("Wi-Fi Direct is idle.") }
     var connected by remember { mutableStateOf(false) }
     var managerError by remember { mutableStateOf<String?>(null) }
     var transportReady by remember { mutableStateOf(false) }
+    var activeTransport by remember { mutableStateOf<SocketFrameTransport?>(null) }
+    var handshake by remember { mutableStateOf<PeerSessionHandshakeController?>(null) }
+    var pinnedPeer by remember { mutableStateOf(pinStore.listFingerprints().firstOrNull()?.let(pinStore::get)) }
+    var peerBundleText by remember { mutableStateOf("") }
+    var sessionReady by remember { mutableStateOf(false) }
+
+    fun prepareHandshake(transport: SocketFrameTransport, peer: PeerIdentityBundle) {
+        handshake?.close()
+        handshake = PeerSessionHandshakeController(
+            localSigningKeyPair = localSigningPair,
+            pinnedPeerSigningKey = peer.signingPublicKey,
+            replayGuard = SessionReplayGuard(activity.applicationContext),
+            sendFrame = { frame -> transport.send(frame) },
+            onEstablished = {
+                mainHandler.post {
+                    sessionReady = true
+                    status = "Peer identity authenticated. Encrypted UA session established."
+                }
+            },
+            onError = { message ->
+                mainHandler.post {
+                    sessionReady = false
+                    status = "Secure handshake rejected: $message"
+                }
+            }
+        )
+        status = "Pinned peer loaded. Start the secure handshake when the other device is ready."
+    }
 
     val managerResult = remember(activity) {
         runCatching {
             WifiDirectPeerManager(activity, object : WifiDirectPeerManager.Listener {
                 override fun onPeersAvailable(devices: List<WifiP2pDevice>) {
-                    peers = devices
-                    status = if (devices.isEmpty()) "No peers found yet. Keep the other device's discovery screen open and scan again."
-                    else "Found ${devices.size} nearby peer(s)."
+                    mainHandler.post {
+                        peers = devices
+                        status = if (devices.isEmpty()) "No peers found yet. Keep the other device's discovery screen open and scan again."
+                        else "Found ${devices.size} nearby peer(s)."
+                    }
                 }
-
                 override fun onConnectionStateChanged(isConnected: Boolean) {
                     mainHandler.post {
                         connected = isConnected
                         if (!isConnected) {
                             transportReady = false
+                            sessionReady = false
+                            activeTransport = null
+                            handshake?.close()
+                            handshake = null
                             status = "Not connected."
+                        } else status = "Wi-Fi Direct group formed. Establishing peer socket..."
+                    }
+                }
+                override fun onFrame(frame: ByteArray) {
+                    mainHandler.post {
+                        val controller = handshake
+                        if (controller != null && controller.state() != PeerSessionHandshakeController.State.ESTABLISHED) {
+                            handshakeExecutor.execute { controller.receiveFrame(frame) }
                         } else {
-                            status = "Wi-Fi Direct group formed. Establishing the peer socket..."
+                            status = "Received a UA frame; message handling is not connected yet."
                         }
                     }
                 }
-
-                override fun onFrame(frame: ByteArray) {
-                    mainHandler.post {
-                        status = "Received a ${frame.size}-byte UA frame. Protocol handling is not connected yet."
-                    }
-                }
-
                 override fun onTransportReady(transport: SocketFrameTransport) {
                     mainHandler.post {
+                        activeTransport = transport
                         transportReady = true
-                        status = "Peer socket ready. Secure UA session handshake is the next layer."
+                        val peer = pinnedPeer
+                        if (peer != null) prepareHandshake(transport, peer)
+                        else status = "Peer socket ready. Import the other device's identity bundle to authenticate it."
                     }
                 }
-
-                override fun onError(message: String) {
-                    mainHandler.post { status = message }
-                }
+                override fun onError(message: String) { mainHandler.post { status = message } }
             })
         }
     }
     val manager = managerResult.getOrNull()
-    val managerUnavailable = managerResult.exceptionOrNull()?.message ?: if (manager == null) "Wi-Fi Direct is unavailable." else null
+    val managerUnavailable = managerResult.exceptionOrNull()?.message
+        ?: if (manager == null) "Wi-Fi Direct is unavailable." else null
 
     DisposableEffect(manager) {
-        manager?.let {
-            runCatching { it.start() }
-                .onFailure { error -> managerError = error.message ?: "Could not start Wi-Fi Direct." }
-        }
-        onDispose { manager?.close() }
+        manager?.let { runCatching { it.start() }.onFailure { managerError = it.message ?: "Could not start Wi-Fi Direct." } }
+        onDispose { handshake?.close(); manager?.close(); handshakeExecutor.shutdownNow() }
     }
 
-    val permission = if (Build.VERSION.SDK_INT >= 33) {
-        Manifest.permission.NEARBY_WIFI_DEVICES
-    } else {
-        Manifest.permission.ACCESS_FINE_LOCATION
-    }
-    val permissionLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.RequestPermission()
-    ) { granted ->
+    val permission = if (Build.VERSION.SDK_INT >= 33) Manifest.permission.NEARBY_WIFI_DEVICES
+        else Manifest.permission.ACCESS_FINE_LOCATION
+    val permissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
         if (granted) {
             runCatching { manager?.discoverPeers() }
                 .onSuccess { status = "Searching for nearby devices..." }
                 .onFailure { status = it.message ?: "Peer discovery failed." }
-        } else {
-            status = if (Build.VERSION.SDK_INT >= 33)
-                "Nearby devices permission is required to discover and connect."
-            else
-                "Location permission is required for Wi-Fi Direct discovery on this Android version."
-        }
+        } else status = if (Build.VERSION.SDK_INT >= 33)
+            "Nearby devices permission is required to discover and connect."
+        else "Location permission is required for Wi-Fi Direct discovery."
     }
 
     Card(modifier = Modifier.fillMaxWidth()) {
-        Column(
-            modifier = Modifier.padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
+        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text("Direct offline connection", style = MaterialTheme.typography.titleSmall)
             Text(status, style = MaterialTheme.typography.bodySmall)
             (managerError ?: managerUnavailable)?.let { Text(it, color = MaterialTheme.colorScheme.error) }
-            Button(
-                onClick = {
-                    if (activity.checkSelfPermission(permission) == PackageManager.PERMISSION_GRANTED) {
-                        runCatching { manager?.discoverPeers() }
-                            .onSuccess { status = "Searching for nearby devices..." }
-                            .onFailure { status = it.message ?: "Peer discovery failed." }
-                    } else {
-                        permissionLauncher.launch(permission)
+
+            Text("Your public identity bundle", style = MaterialTheme.typography.labelLarge)
+            Text("Share this with the other person through a trusted out-of-band channel.", style = MaterialTheme.typography.bodySmall)
+            TextButton(onClick = {
+                clipboard.setPrimaryClip(ClipData.newPlainText("Urban Alchemy identity", localBundle))
+                status = "Public identity bundle copied."
+            }) { Text("Copy my identity bundle") }
+
+            OutlinedTextField(
+                value = peerBundleText, onValueChange = { peerBundleText = it },
+                modifier = Modifier.fillMaxWidth(), label = { Text("Paste the other device's identity bundle") }, minLines = 2
+            )
+            Button(onClick = {
+                runCatching {
+                    val peer = PeerIdentityBundle.decode(peerBundleText)
+                    require(peer.fingerprint != SignedSessionHandshake.fingerprint(localSigningPair.public)) {
+                        "You cannot pin your own identity."
                     }
-                },
-                enabled = manager != null && !connected
-            ) { Text("Find nearby devices") }
+                    pinStore.pin(peerBundleText)
+                }.onSuccess { peer ->
+                    pinnedPeer = peer
+                    peerBundleText = ""
+                    sessionReady = false
+                    activeTransport?.let { prepareHandshake(it, peer) }
+                        ?: run { status = "Peer identity pinned. Connect to the other device to begin." }
+                }.onFailure { status = it.message ?: "Could not pin peer identity." }
+            }, enabled = peerBundleText.isNotBlank()) { Text("Verify and pin peer identity") }
+
+            pinnedPeer?.let { Text("Pinned peer: ${it.fingerprint}", style = MaterialTheme.typography.bodySmall) }
+                ?: Text("No peer identity pinned yet.", style = MaterialTheme.typography.bodySmall)
+
+            Button(onClick = {
+                if (activity.checkSelfPermission(permission) == PackageManager.PERMISSION_GRANTED) {
+                    runCatching { manager?.discoverPeers() }
+                        .onSuccess { status = "Searching for nearby devices..." }
+                        .onFailure { status = it.message ?: "Peer discovery failed." }
+                } else permissionLauncher.launch(permission)
+            }, enabled = manager != null && !connected) { Text("Find nearby devices") }
+
             if (peers.isNotEmpty()) {
                 Text("Nearby devices", style = MaterialTheme.typography.labelLarge)
                 peers.forEach { peer ->
-                    TextButton(
-                        onClick = {
-                            runCatching { manager?.connect(peer) }
-                                .onSuccess { status = "Connecting to ${peer.deviceName}..." }
-                                .onFailure { status = it.message ?: "Connection failed." }
-                        },
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
+                    TextButton(onClick = {
+                        runCatching { manager?.connect(peer) }
+                            .onSuccess { status = "Connecting to ${peer.deviceName}..." }
+                            .onFailure { status = it.message ?: "Connection failed." }
+                    }, modifier = Modifier.fillMaxWidth()) {
                         Column(modifier = Modifier.fillMaxWidth()) {
                             Text(peer.deviceName.ifBlank { "Unnamed Android device" })
                             Text(peer.deviceAddress, style = MaterialTheme.typography.labelSmall)
                         }
                     }
                 }
-                TextButton(
-                    onClick = {
-                        if (activity.checkSelfPermission(permission) == PackageManager.PERMISSION_GRANTED) {
-                            runCatching { manager?.discoverPeers() }
-                                .onSuccess { status = "Refreshing nearby devices..." }
-                                .onFailure { status = it.message ?: "Peer discovery failed." }
-                        } else permissionLauncher.launch(permission)
-                    }
-                ) { Text("Scan again") }
+                TextButton(onClick = {
+                    if (activity.checkSelfPermission(permission) == PackageManager.PERMISSION_GRANTED) {
+                        runCatching { manager?.discoverPeers() }.onSuccess { status = "Refreshing nearby devices..." }
+                            .onFailure { status = it.message ?: "Peer discovery failed." }
+                    } else permissionLauncher.launch(permission)
+                }) { Text("Scan again") }
             }
-            if (transportReady) {
-                Text("TCP socket connected · UA frame channel ready", style = MaterialTheme.typography.bodySmall)
+
+            if (transportReady) Text("Wi-Fi Direct socket connected · UA frame channel ready", style = MaterialTheme.typography.bodySmall)
+            if (handshake != null && !sessionReady) {
+                Button(onClick = {
+                    runCatching { handshake?.let { controller -> handshakeExecutor.execute { controller.begin() } } }
+                        .onSuccess { status = "Sending signed session offer..." }
+                        .onFailure { status = it.message ?: "Could not start secure handshake." }
+                }, enabled = transportReady && pinnedPeer != null &&
+                    handshake?.state() == PeerSessionHandshakeController.State.NEW) {
+                    Text("Start secure session")
+                }
             }
+            if (sessionReady) Text("Authenticated encrypted session ready.", color = MaterialTheme.colorScheme.primary)
             Text(
-                "No internet or LXMF is required for this direct link. This connection does not yet exchange identities or deliver chat messages.",
+                "No internet or LXMF is required. Peer identity must be exchanged and verified out of band; an ordinary socket connection is not trusted by itself.",
                 style = MaterialTheme.typography.bodySmall
             )
         }
