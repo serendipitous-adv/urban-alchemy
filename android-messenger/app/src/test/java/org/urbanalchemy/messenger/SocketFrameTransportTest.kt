@@ -83,6 +83,28 @@ class SocketFrameTransportTest {
         }
     }
 
+    @Test fun rejectsTruncatedInboundFrameHeader() {
+        ServerSocket(0).use { server ->
+            val remote = Socket("127.0.0.1", server.localPort)
+            val local = server.accept()
+            val listener = RecordingListener()
+            val transport = SocketFrameTransport(local, listener)
+            try {
+                transport.start()
+                DataOutputStream(remote.getOutputStream()).apply {
+                    writeShort(1)
+                    flush()
+                }
+                remote.shutdownOutput()
+                org.junit.Assert.assertTrue(listener.errorLatch.await(2, TimeUnit.SECONDS))
+                assertNotNull(listener.error.get())
+            } finally {
+                transport.close()
+                remote.close()
+            }
+        }
+    }
+
     @Test fun rejectsInvalidInboundFrameLength() {
         ServerSocket(0).use { server ->
             val remote = Socket("127.0.0.1", server.localPort)
