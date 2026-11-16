@@ -631,6 +631,30 @@ The map is a client/application feature, not a central authority or mandatory ne
 The suitability of existing open-source mapping and situational-awareness projects, including TAK/ATAK-related software, is an implementation research question. UA MUST NOT assume compatibility with TAK data formats, plugins, or network services until those interfaces and their licensing and security implications are evaluated. TAK is a potential client/interface or interoperability reference, not a required architectural dependency.
 
 
+
+### 13.6 Interaction graph and peer-to-peer mobility — design direction
+
+The UA map SHOULD represent both geographic places and potential interactions. It is a discovery and coordination interface for the social world, not merely a static geographic directory.
+
+The interaction layer MAY represent:
+- People and personas who have explicitly opted into relevant discovery.
+- Guilds, Patches, federations, and community services.
+- Quests, events, gatherings, and collaborative opportunities.
+- Participant-offered skills, resources, help, and requests.
+- Routes, destinations, travel intentions, and transportation opportunities.
+- Relationships among these objects, including ways to participate or make contact.
+
+Interaction records MUST be selectively published and access-controlled. A map MUST NOT imply that a person is currently present, available, or willing to interact merely because a persona or community appears on it. Live presence, precise location, travel intentions, and contactability require separate, explicit controls and SHOULD support time limits and revocation.
+
+UA SHOULD eventually support peer-to-peer rideshare as a native community service integrated with quests, events, Guilds, Patches, and the map. The protocol MAY represent ride offers and requests, approximate pickup/drop-off areas, route corridors, departure windows, available seats, accessibility or cargo details, and the parties' agreed terms, subject to explicit disclosure and consent.
+
+P2P mobility MUST NOT depend on a central dispatch service. Nodes MAY discover and coordinate ride offers and requests through Reticulum using selective publication, authorized requests, and asynchronous messaging where appropriate. Discovery of an offer MUST NOT itself book a ride or disclose either party's precise location. Participants must explicitly accept a match and exchange only the information necessary for the agreed trip.
+
+The mobility design MUST treat safety, privacy, abuse prevention, and participant autonomy as first-class concerns. It SHOULD support participant-controlled identity disclosure, blocking/reporting, cancellation, clear agreement on trip details, and community-defined trust or eligibility policies. The protocol MUST NOT imply that cryptographic identity or a signed ride record guarantees a participant's real-world identity, safety, driving qualifications, insurance, or conduct.
+
+The map and mobility features are application services over the common UA protocol. They MUST NOT become mandatory dependencies for Guilds, Patches, or ordinary quest participation.
+
+
 ### 13.1 Community autonomy and protocol-level governance boundaries — accepted design direction
 
 UA MUST define shared interoperability, security, and minimum privacy requirements without imposing a universal constitution or a single political structure on every Guild or Patch.
@@ -733,6 +757,9 @@ The prototype is accepted only when the following tests pass:
 29. A community can selectively publish or withhold its federation listing and geographic metadata independently; clients distinguish verified federation agreements from unverified claims, and map/index discovery never grants membership or access.
 30. A prototype can render and synchronize a small set of signed, visibility-controlled geographic records offline, without requiring a central map provider or exposing unpublished locations.
 
+31. A client can display opt-in interaction opportunities alongside geographic records while distinguishing static listings from live presence or availability; private location and contact details remain undisclosed until explicitly authorized.
+32. Two independently operated nodes can publish, discover, negotiate, accept, and cancel a peer-to-peer ride offer/request without a central dispatch service, while protecting precise location until the parties agree to share it.
+
 ## 18. Phase 0 open questions
 
 These remain deliberately unresolved until research or prototype evidence is available:
@@ -759,6 +786,8 @@ These remain deliberately unresolved until research or prototype evidence is ava
 - Geographic object and privacy model, including approximate/private/time-limited locations, offline map data, and independent publication controls.
 - Federation index record schema, verification/freshness semantics, and selective publication.
 - Open-source mapping client and TAK/ATAK interoperability research, including licenses, APIs, data formats, and operational security.
+- Interaction graph/object model, opt-in presence and availability semantics, and privacy-preserving discovery.
+- P2P ride offer/request, matching, consent, cancellation, safety, and abuse-prevention protocol; legal and operational requirements for deployment.
 
 ## 19. Phase 0 exit criteria
 
@@ -803,7 +832,8 @@ No production application implementation should begin until the Phase 0 exit cri
 | D-022 | Guilds and Patches establish self-generated cryptographic identities with stable key-derived identifiers, mutable non-unique names, and verifiable signed genesis records | Accepted design direction |
 | D-023 | Guilds and Patches may form voluntary, scoped, non-hierarchical federations without surrendering community sovereignty or implicitly transferring membership, reputation, SCAF, or governance authority | Accepted design direction |
 | D-024 | Federation does not automatically transfer individual membership; players may discover intentionally published federation relationships through a selective community index | Accepted design direction |
-| D-025 | UA should develop an open-source, decentralized map layer with independently controlled geographic publication; TAK/ATAK is a research candidate, not a required dependency | Accepted design direction
+| D-025 | UA should develop an open-source, decentralized map layer with independently controlled geographic publication; TAK/ATAK is a research candidate, not a required dependency | Accepted design direction |
+| D-026 | The UA map represents potential social interactions as well as geography, and should eventually integrate decentralized P2P rideshare as a native optional service | Accepted design direction |
 
 ## 21. Research references
 
