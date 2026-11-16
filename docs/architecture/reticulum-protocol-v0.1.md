@@ -675,6 +675,8 @@ Public social-graph discovery SHOULD be supported by independent, decentralized 
 
 Relationship types SHOULD use a small interoperable vocabulary for common concepts while allowing communities and participants to define additional types. Custom types MUST carry a stable type identifier, human-readable label, and optional definition or usage guidance. Implementations MUST preserve unknown type identifiers and SHOULD display an intelligible fallback label rather than discarding or silently remapping them.
 
+Relationship types MUST be independent by default; the protocol MUST NOT impose a universal hierarchy, score, or progression ladder for human relationships. Communities MAY define optional, local progression systems or intensity markers for their own purposes. Such systems MUST be explicitly scoped to the defining community or context, MUST NOT silently change the meaning of a relationship outside that scope, and MUST NOT be treated as universal reputation or trust scores. Participants MUST retain control over whether their own relationship status or progression is disclosed.
+
 Custom relationship types MUST NOT alter the underlying authorization, consent, or confirmation semantics. A playful or locally defined label (for example, "fellow wanderer" or "creative accomplice") is descriptive metadata, not proof of a legally or socially recognized status. Type definitions MAY be published by individuals or communities and selectively adopted by clients; no central taxonomy authority is required.
 
 The social graph and opportunity graph are related but distinct:
@@ -849,6 +851,7 @@ These remain deliberately unresolved until research or prototype evidence is ava
 - Ephemeral activity-zone object schema, expiry/refresh semantics, audience and location-precision controls, response/contact workflow, and abuse/spam protections.
 - Social-graph assertion and mutual-confirmation schemas, relationship types, visibility and consent semantics, decentralized indexing, dispute/revocation, and unsolicited-contact protections.
 - Interoperable core relationship vocabulary, custom relationship-type identifiers and definitions, and safe handling of unknown types across clients.
+- Optional community-scoped relationship intensity/progression models, participant consent and disclosure, and interoperability for unknown progression schemes.
 
 ## 19. Phase 0 exit criteria
 
@@ -898,6 +901,7 @@ No production application implementation should begin until the Phase 0 exit cri
 | D-027 | Support opt-in, time-bounded activity zones created by individuals, Guilds, or Patches, with publisher-controlled audience, location precision, participation, and expiry; publication does not imply presence | Accepted design direction |
 | D-028 | Support a decentralized, participant-authored social graph distinguishing unilateral relationship assertions, mutually confirmed relationships, and community-issued records; public indexing is explicit and incidental activity does not create durable relationships | Accepted design direction |
 | D-029 | Use a small interoperable core relationship vocabulary while allowing extensible participant- and community-defined relationship types with stable identifiers and preserved unknown types | Accepted design direction |
+| D-030 | Relationship types are independent by default; optional progression/intensity systems may be defined locally by communities, with no universal hierarchy or score | Accepted design direction |
 
 ## 21. Research references
 
