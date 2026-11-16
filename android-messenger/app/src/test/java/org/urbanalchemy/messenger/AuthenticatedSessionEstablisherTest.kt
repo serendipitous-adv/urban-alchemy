@@ -55,16 +55,14 @@ class AuthenticatedSessionEstablisherTest {
         dbNames.forEach(context::deleteDatabase)
     }
 
-    @Test fun bothPeersEstablishTheSameSessionKey() {
-        val aliceEstablisher = AuthenticatedSessionEstablisher(guard())
-        val bobEstablisher = AuthenticatedSessionEstablisher(guard())
-        val aliceSession = aliceEstablisher.establish(
+    @Test fun bothPeersEstablishTheSameSessionKeyWithoutEachOthersPrivateKeys() {
+        val aliceSession = AuthenticatedSessionEstablisher(guard()).establish(
             aliceOffer, bobOffer, alice.public, bob.public,
-            aliceEphemeral, bobEphemeral, now + 1_000L, true
+            aliceEphemeral, now + 1_000L, true
         )
-        val bobSession = bobEstablisher.establish(
+        val bobSession = AuthenticatedSessionEstablisher(guard()).establish(
             aliceOffer, bobOffer, alice.public, bob.public,
-            aliceEphemeral, bobEphemeral, now + 1_000L, false
+            bobEphemeral, now + 1_000L, false
         )
         val aliceKey = aliceSession.copySessionKey()
         val bobKey = bobSession.copySessionKey()
@@ -80,13 +78,13 @@ class AuthenticatedSessionEstablisherTest {
         val establisher = AuthenticatedSessionEstablisher(guard())
         val first = establisher.establish(
             aliceOffer, bobOffer, alice.public, bob.public,
-            aliceEphemeral, bobEphemeral, now + 1_000L, true
+            aliceEphemeral, now + 1_000L, true
         )
         first.close()
         try {
             establisher.establish(
                 aliceOffer, bobOffer, alice.public, bob.public,
-                aliceEphemeral, bobEphemeral, now + 1_000L, true
+                aliceEphemeral, now + 1_000L, true
             )
             fail("Previously accepted offers must be rejected.")
         } catch (_: IllegalArgumentException) { }
@@ -96,7 +94,7 @@ class AuthenticatedSessionEstablisherTest {
         try {
             AuthenticatedSessionEstablisher(guard()).establish(
                 aliceOffer, bobOffer, alice.public, bob.public,
-                keyPair(), bobEphemeral, now + 1_000L, true
+                keyPair(), now + 1_000L, true
             )
             fail("Mismatched local ephemeral key must be rejected.")
         } catch (_: IllegalArgumentException) { }
@@ -108,7 +106,7 @@ class AuthenticatedSessionEstablisherTest {
         try {
             AuthenticatedSessionEstablisher(replay).establish(
                 tampered, bobOffer, alice.public, bob.public,
-                aliceEphemeral, bobEphemeral, now + 1_000L, true
+                aliceEphemeral, now + 1_000L, true
             )
             fail("Tampered offer must be rejected.")
         } catch (_: IllegalArgumentException) { }
