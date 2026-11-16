@@ -727,6 +727,23 @@ Publication MUST NOT be treated as proof that the publisher is physically presen
 Discovery and participation MUST remain decentralized and subject to the same selective publication, authorization, offline operation, and anti-spam protections as other UA interaction objects. An activity zone MUST NOT require a central event service or map provider, and MUST NOT become a prerequisite for ordinary quest, Guild, or Patch participation.
 
 
+### 13.9 Hybrid reactive and proactive quest generation — accepted design direction
+
+Dynamic quest generation and serendipitous matchmaking are core UA capabilities. UA MUST support both reactive generation, responding to explicitly expressed needs, offers, interests, requests, and participant activity, and proactive discovery, where independently operated nodes or community-controlled services identify potentially valuable opportunities before a participant explicitly requests a quest.
+
+1. Reactive generation MAY transform an expressed need, offer, interest, request, or community objective into one or more quest proposals.
+2. Proactive generation MAY identify potential collaborations, complementary interests or capabilities, unmet needs, useful gatherings, and other opportunities from context the generating service is authorized to access.
+3. Generation MAY be performed by local rules, participant-controlled tools, community services, optional AI stewards, or combinations thereof. No central model, service, or orchestrator is required.
+4. A generating service MUST respect source-record visibility, purpose limitations, consent, and community policy. It MUST NOT infer or publish a durable relationship, sensitive attribute, obligation, or endorsement merely from proximity, co-attendance, message traffic, or model inference.
+5. A recommendation MUST be distinguishable from a participant-authored or community-approved quest. Generated proposals MUST carry provenance sufficient to identify the generating service or agent, relevant source/context references where disclosure is authorized, and the generation method/version where practical.
+6. A suggested introduction or collaboration involving multiple people MUST use mutual opt-in before revealing non-public details, initiating direct contact, or treating the parties as participants in a shared activity.
+7. A proposal MUST NOT enroll a participant, create an obligation, imply consent, or automatically publish a quest. Publication and participation remain subject to explicit authorization and ordinary quest validation.
+8. Participants and communities SHOULD be able to configure or decline proactive suggestions, control the context available to generators, and report or block abusive recommendations.
+9. Generated quests MUST pass the same authorization, safety, visibility, publication, and participation rules as other quests. Generation MUST NOT bypass quest authorship or governance rules.
+10. Dynamic generation MUST work without a central service; nodes MAY exchange authorized context and proposals opportunistically over Reticulum, including under intermittent connectivity.
+
+The design goal is a world that can surface possibilities people did not know to ask for, without turning prediction into surveillance or suggestions into obligations. Reactive and proactive generation are complementary modes, not competing architectures.
+
 ### 13.1 Community autonomy and protocol-level governance boundaries — accepted design direction
 
 UA MUST define shared interoperability, security, and minimum privacy requirements without imposing a universal constitution or a single political structure on every Guild or Patch.
@@ -840,6 +857,8 @@ The prototype is accepted only when the following tests pass:
 
 36. Independent nodes or community-controlled services can generate and recommend a quest or potential collaboration from authorized context; generated content is distinguishable from authored content, sensitive introductions use mutual opt-in, no participant is enrolled or contacted without authorization, and a generated quest passes ordinary publication and participation validation.
 
+37. The prototype demonstrates both reactive generation from explicit participant/community signals and proactive discovery from authorized context; participants can control or decline proactive suggestions, recommendations retain provenance, multi-party introductions require mutual opt-in, and no generated proposal creates obligations or bypasses ordinary quest publication and participation rules.
+
 ## 18. Phase 0 open questions
 
 These remain deliberately unresolved until research or prototype evidence is available:
@@ -874,6 +893,7 @@ These remain deliberately unresolved until research or prototype evidence is ava
 - Optional community-scoped relationship intensity/progression models, participant consent and disclosure, and interoperability for unknown progression schemes.
 - Privacy-preserving use of social-graph context for quest recommendations and creation, including purpose limitation, explainability, and safeguards against inferred obligations or unauthorized disclosure.
 - Dynamic quest-generation and serendipitous-matchmaking architecture, including context selection, generation provenance, decentralized model/service discovery, mutual-opt-in introductions, abuse resistance, and validation of generated quests.
+- Reactive/proactive generation policy and controls, including participant preferences, authorized context selection, recommendation explainability, feedback, rate limits, and safeguards against unwanted or manipulative suggestions.
 
 ## 19. Phase 0 exit criteria
 
@@ -926,6 +946,7 @@ No production application implementation should begin until the Phase 0 exit cri
 | D-030 | Relationship types are independent by default; optional progression/intensity systems may be defined locally by communities, with no universal hierarchy or score | Accepted design direction |
 | D-031 | Social-graph records may inform optional quest discovery, recommendations, and community quest creation, but never create obligations, imply consent, or bypass graph visibility and quest authorization | Accepted design direction |
 | D-032 | Dynamic quest generation and serendipitous matchmaking are core UA capabilities; independent nodes and communities may generate opportunities from authorized context, with provenance, privacy, mutual opt-in, and ordinary quest validation safeguards | Accepted design direction |
+| D-033 | Quest generation is hybrid: reactive generation responds to expressed needs/offers/interests/requests, while proactive discovery surfaces opportunities from authorized context; suggestions remain controllable, provenance-aware, mutual-opt-in where multi-party, and never create obligations or bypass quest rules | Accepted design direction |
 
 ## 21. Research references
 
