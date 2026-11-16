@@ -60,7 +60,7 @@ def _state_name(state):
     return names.get(state, "UNKNOWN")
 
 
-def send_message(recipient_hex, text, client_message_id):
+def send_message(recipient_hex, text, client_message_id, recipient_public_key=None):
     """Submit one opportunistic LXMF message; route discovery is non-blocking."""
     with _lock:
         if _router is None or _source is None:
@@ -87,8 +87,22 @@ def send_message(recipient_hex, text, client_message_id):
             "client_message_id": client_message_id,
         })
 
-    recipient_identity = RNS.Identity.recall(destination_hash)
+    recipient_identity = None
+    if recipient_public_key:
+        try:
+            public_identity = RNS.Identity(create_keys=False)
+            loaded = public_identity.load_public_key(bytes.fromhex(recipient_public_key))
+            expected_hash = RNS.Destination.hash(public_identity, "lxmf", "delivery")
+            if not loaded or expected_hash != destination_hash:
+                raise ValueError("Saved contact public key does not match its LXMF address")
+            recipient_identity = public_identity
+        except Exception as exc:
+            raise ValueError("The saved contact identity could not be verified: " + str(exc)) from exc
+    else:
+        recipient_identity = RNS.Identity.recall(destination_hash)
+
     if recipient_identity is None:
+        RNS.Transport.request_path(destination_hash)
         return json.dumps({
             "accepted": False,
             "status": "WAITING_FOR_IDENTITY",
