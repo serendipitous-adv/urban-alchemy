@@ -211,6 +211,17 @@ class LocalStore(context: Context) : SQLiteOpenHelper(context, "ua_messenger.db"
             if (cursor.moveToFirst()) Triple(cursor.getString(0), cursor.getString(1), cursor.getString(2)) else null
         }
         if (existing != null) {
+            if (existing.second == null && existing.third == null) {
+                val upgrade = ContentValues().apply {
+                    put("name", cleanName)
+                    put("identity_hash", identityHash)
+                    put("public_key", publicKey)
+                    if (playerId == null) putNull("player_id") else put("player_id", playerId)
+                    put("verified", 1)
+                }
+                writableDatabase.update("contacts", upgrade, "id = ?", arrayOf(existing.first))
+                return existing.first
+            }
             require(existing.second == identityHash && existing.third == publicKey) {
                 "This LXMF address is already saved with a different identity. No changes were made."
             }
