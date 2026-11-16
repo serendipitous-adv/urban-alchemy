@@ -185,13 +185,13 @@ def announce():
 
 
 
-def send_message(recipient_hex, text, client_message_id):
+def send_message(recipient_hex, text, client_message_id, recipient_public_key=None):
     """Submit a message through the active LXMF router."""
     from lxmf_messaging import send_message as lxmf_send
     with _runtime_lock:
         if _runtime_state is None:
             raise RuntimeError("Start Reticulum before sending.")
-    return lxmf_send(recipient_hex, text, client_message_id)
+    return lxmf_send(recipient_hex, text, client_message_id, recipient_public_key)
 
 
 def drain_events(limit=100):
