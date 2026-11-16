@@ -28,14 +28,20 @@ title, content, timestamp, signature-validation state and transport-encryption
 metadata. Outbound events include the stable local message ID, LXMF hash,
 LXMF state and progress.
 
-## Important boundaries
+## Current Android integration
 
-This is a bridge milestone, not yet the live-messaging MVP. The Kotlin UI and
-SQLite outbox/inbox are not wired to call `send_message` or poll
-`drain_events` in this commit. The bridge event queue is currently in memory;
-Kotlin must persist every inbound event before considering it consumed.
-Messages that return `WAITING_FOR_ROUTE` must remain queued in SQLite and be
-retried after a later route/announce refresh.
+The Android host already has a first-pass integration: it stores outgoing
+messages encrypted in `LocalStore`, submits queued messages through
+`transport_probe.send_message`, polls `peek_events` on a worker coroutine,
+persists inbound messages by LXMF hash, and acknowledges bridge events after
+processing the batch. It retries messages waiting for a route while the app is
+active.
+
+This is not yet a qualified live-messaging MVP. The receive path must accept
+only events whose LXMF signature is validated and whose destination matches
+the local delivery identity. Route recovery, event-queue behavior across
+process death, concurrent database writes, and physical two-device delivery
+still require verification.
 
 The bridge uses opportunistic LXMF delivery. It does not claim router
 acceptance means recipient delivery. The UI must distinguish at least:

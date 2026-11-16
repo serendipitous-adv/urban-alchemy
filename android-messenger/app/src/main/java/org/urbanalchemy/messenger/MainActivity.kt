@@ -84,10 +84,11 @@ class MainActivity : ComponentActivity() {
                 "Urban Alchemy"
             ).toString()
         )
+        val localDestination = runtime.getString("destination")
         store.bindReticulumIdentity(
             runtime.getString("reticulum_identity_hash"),
             runtime.getString("reticulum_public_key"),
-            runtime.getString("destination")
+            localDestination
         )
 
         var processed = 0
@@ -116,12 +117,25 @@ class MainActivity : ComponentActivity() {
             when (event.optString("type")) {
                 "inbound" -> {
                     val source = event.optString("source")
+                    val destination = event.optString("destination")
                     val hash = event.optString("message_hash")
-                    if (source.isNotBlank() && source != "null" && hash.isNotBlank() && hash != "null") {
+                    val signatureValidated = event.optBoolean("signature_validated", false)
+                    // Never persist or surface an inbound message unless LXMF has
+                    // validated its signature and it targets this device's delivery identity.
+                    if (
+                        signatureValidated &&
+                        destination == localDestination &&
+                        source.isNotBlank() && source != "null" &&
+                        hash.isNotBlank() && hash != "null"
+                    ) {
                         store.saveInbound(
                             source, hash, event.optString("content"),
                             event.optLong("timestamp", System.currentTimeMillis())
                         )
+                        processed++
+                    } else {
+                        // Explicitly discard invalid/misdirected callback events so
+                        // they do not remain at the head of the bridge queue forever.
                         processed++
                     }
                 }
