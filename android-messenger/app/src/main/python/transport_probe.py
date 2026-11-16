@@ -203,6 +203,25 @@ def drain_events(limit=100):
     return lxmf_drain(limit)
 
 
+
+def peek_events(limit=100):
+    """Read pending bridge events without acknowledging them."""
+    from lxmf_messaging import peek_events as lxmf_peek
+    with _runtime_lock:
+        if _runtime_state is None:
+            raise RuntimeError("Start Reticulum before reading messages.")
+    return lxmf_peek(limit)
+
+
+def ack_events(count):
+    """Acknowledge bridge events only after Android has persisted the batch."""
+    from lxmf_messaging import ack_events as lxmf_ack
+    with _runtime_lock:
+        if _runtime_state is None:
+            raise RuntimeError("Start Reticulum before acknowledging messages.")
+    return lxmf_ack(count)
+
+
 def create_contact_invite(display_name, player_id=None):
     """Export public contact details for sharing; never exports private keys."""
     with _runtime_lock:
