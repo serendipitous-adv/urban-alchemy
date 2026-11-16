@@ -265,6 +265,21 @@ Requirements:
 
 The protocol SHOULD model relationship disclosure as a participant-controlled authorization rather than a permanent property of either persona. The wire format, credential model, revocation distribution, and practical limits of verifier-specific unlinkability remain open for Phase 1 research and prototype validation.
 
+
+### 6.3.7 Limits on mandatory cross-persona linkage — accepted design direction
+
+A Guild or other community MUST NOT make proof that multiple personas share common control a blanket prerequisite for ordinary participation.
+
+A community MAY request a narrowly scoped proof for a specific, published purpose where the proof is proportionate to the risk or benefit involved (for example, enforcing a clearly defined one-per-participant benefit). Such a request MUST:
+
+1. State the purpose, the rule being enforced, and why a less revealing method is insufficient.
+2. Request only the minimum claim and scope necessary; it MUST NOT demand disclosure of a participant's full persona inventory or master recovery identity.
+3. Be limited to the relevant action or benefit rather than becoming a general condition of membership or participation.
+4. Provide a reasonable alternative where practicable for participants who decline or cannot provide the requested proof, while clearly explaining any specific benefit or action that cannot then be granted.
+5. Be governed by the community's published policy and remain subject to participant choice; the protocol MUST NOT silently convert a request into universal identity-linkage authority.
+
+Communities MAY define eligibility rules for scarce or explicitly one-per-person benefits, but SHOULD prefer privacy-preserving eligibility credentials, rate limits, or other less-linking mechanisms where they adequately address the abuse case. A proof request MUST NOT itself establish legal identity or broader authority.
+
 ### 6.4 Identity, persona, membership, and reputation
 
 These are separate concepts:
@@ -575,6 +590,7 @@ The prototype is accepted only when the following tests pass:
 20. Compromise recovery preserves the stable UA persona identifier while binding it to fresh RNS key material/identity where necessary; historical signatures remain verifiable under their original keys.
 21. A participant can selectively prove a narrowly scoped cross-persona common-control claim to an authorized verifier without publishing a global persona-linkage handle; proof-system claims are validated against an explicit threat model.
 22. A participant can disclose a scoped association between personas or between a persona and a specific community, while withholding that relationship from other audiences; revocation affects future reliance but does not erase information already received.
+23. Ordinary Guild participation does not require blanket proof of common control across personas; a narrowly scoped request for a published, proportionate purpose is handled under an explicit community policy and offers a reasonable alternative where practicable.
 
 ## 18. Phase 0 open questions
 
@@ -588,6 +604,7 @@ These remain deliberately unresolved until research or prototype evidence is ava
 - Stable UA persona identifier and key-transition statement schema, including RNS identity replacement semantics.
 - Privacy-preserving selective proof format for narrowly scoped cross-persona common-control claims.
 - Scoped persona-relationship assertion/credential format, verifier and audience binding, and revocation/expiry distribution.
+- Privacy-preserving eligibility mechanisms and alternatives to common-control proofs for one-per-participant benefits.
 - Event identifier construction and canonicalization.
 - Synchronization summary/anti-entropy algorithm.
 - Storage encryption and secure key storage per platform.
@@ -629,6 +646,7 @@ No production application implementation should begin until the Phase 0 exit cri
 | D-013 | Preserve the stable UA persona through key rotation/recovery; replace compromised RNS key material and bind fresh RNS identity to the same persona where required | Accepted design direction |
 | D-014 | Support participant-controlled, privacy-preserving selective proofs of narrowly scoped common control across personas; investigate zero-knowledge techniques without prematurely selecting a proof system | Accepted design direction |
 | D-015 | Persona relationships and association disclosures are granular, explicitly scoped, selectively disclosed, and independently revocable; revocation cannot erase information already received | Accepted design direction |
+| D-016 | No blanket common-control proof requirement for ordinary Guild participation; narrowly scoped, proportionate requests require a published purpose and reasonable alternative where practicable | Accepted design direction |
 
 ## 21. Research references
 
