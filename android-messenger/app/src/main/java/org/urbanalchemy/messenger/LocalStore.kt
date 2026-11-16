@@ -43,7 +43,7 @@ data class LocalMessage(
     val status: String
 )
 
-class LocalStore(context: Context) : SQLiteOpenHelper(context, "ua_messenger.db", null, 6) {
+class LocalStore(context: Context) : SQLiteOpenHelper(context, "ua_messenger.db", null, 7) {
     override fun onCreate(db: SQLiteDatabase) {
         db.execSQL(
             """CREATE TABLE contacts (
@@ -62,13 +62,15 @@ class LocalStore(context: Context) : SQLiteOpenHelper(context, "ua_messenger.db"
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 title TEXT NOT NULL,
                 created_at INTEGER NOT NULL,
-                contact_id TEXT REFERENCES contacts(id) ON DELETE SET NULL
+                contact_id TEXT REFERENCES contacts(id) ON DELETE SET NULL,
+                remote_hash TEXT
             )""".trimIndent()
         )
         createMessagesTable(db)
         createUaIdentityTable(db)
         db.execSQL("CREATE INDEX messages_conversation_time ON messages(conversation_id, created_at)")
         db.execSQL("CREATE UNIQUE INDEX messages_lxmf_hash ON messages(lxmf_hash) WHERE lxmf_hash IS NOT NULL")
+        db.execSQL("CREATE UNIQUE INDEX conversations_remote_hash ON conversations(remote_hash) WHERE remote_hash IS NOT NULL")
     }
 
     private fun createUaIdentityTable(db: SQLiteDatabase) {
@@ -131,6 +133,10 @@ class LocalStore(context: Context) : SQLiteOpenHelper(context, "ua_messenger.db"
             db.execSQL("ALTER TABLE messages ADD COLUMN lxmf_hash TEXT")
             db.execSQL("ALTER TABLE messages ADD COLUMN remote_hash TEXT")
             db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS messages_lxmf_hash ON messages(lxmf_hash) WHERE lxmf_hash IS NOT NULL")
+        }
+        if (oldVersion < 7) {
+            db.execSQL("ALTER TABLE conversations ADD COLUMN remote_hash TEXT")
+            db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS conversations_remote_hash ON conversations(remote_hash) WHERE remote_hash IS NOT NULL")
         }
     }
 
@@ -269,17 +275,25 @@ class LocalStore(context: Context) : SQLiteOpenHelper(context, "ua_messenger.db"
 
     fun createConversation(title: String): Long = insertConversation(title, null)
 
+    @Synchronized
     fun createConversationForContact(contactId: String): Long {
         val contact = listContacts().firstOrNull { it.id == contactId }
             ?: error("Contact no longer exists.")
+        readableDatabase.rawQuery(
+            "SELECT id FROM conversations WHERE contact_id = ? ORDER BY id LIMIT 1",
+            arrayOf(contactId)
+        ).use { cursor ->
+            if (cursor.moveToFirst()) return cursor.getLong(0)
+        }
         return insertConversation(contact.name, contact.id)
     }
 
-    private fun insertConversation(title: String, contactId: String?): Long {
+    private fun insertConversation(title: String, contactId: String?, remoteHash: String? = null): Long {
         val values = ContentValues().apply {
             put("title", title.trim())
             put("created_at", System.currentTimeMillis())
             if (contactId == null) putNull("contact_id") else put("contact_id", contactId)
+            if (remoteHash == null) putNull("remote_hash") else put("remote_hash", remoteHash)
         }
         return writableDatabase.insertOrThrow("conversations", null, values)
     }
@@ -410,7 +424,13 @@ class LocalStore(context: Context) : SQLiteOpenHelper(context, "ua_messenger.db"
                 if (cursor.moveToFirst()) cursor.getLong(0) else insertConversation(contact.second, contact.first)
             }
         } else {
-            insertConversation("Message request · ${source.take(8)}", null)
+            readableDatabase.rawQuery(
+                "SELECT id FROM conversations WHERE remote_hash = ? LIMIT 1",
+                arrayOf(source)
+            ).use { cursor ->
+                if (cursor.moveToFirst()) cursor.getLong(0)
+                else insertConversation("Message request · ${source.take(8)}", null, source)
+            }
         }
         val sealed = LocalMessageCrypto.encrypt(text)
         val id = UUID.randomUUID().toString()
