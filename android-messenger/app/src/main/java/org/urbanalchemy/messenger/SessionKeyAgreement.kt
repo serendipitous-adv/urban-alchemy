@@ -3,7 +3,7 @@ package org.urbanalchemy.messenger
 import java.io.ByteArrayOutputStream
 import java.io.DataOutputStream
 import java.nio.charset.StandardCharsets
-import java.security.KeyAgreement
+import javax.crypto.KeyAgreement
 import java.security.KeyPair
 import java.security.MessageDigest
 import javax.crypto.Mac
