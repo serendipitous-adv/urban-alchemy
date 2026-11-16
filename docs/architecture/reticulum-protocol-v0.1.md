@@ -679,6 +679,12 @@ Relationship types MUST be independent by default; the protocol MUST NOT impose 
 
 Custom relationship types MUST NOT alter the underlying authorization, consent, or confirmation semantics. A playful or locally defined label (for example, "fellow wanderer" or "creative accomplice") is descriptive metadata, not proof of a legally or socially recognized status. Type definitions MAY be published by individuals or communities and selectively adopted by clients; no central taxonomy authority is required.
 
+Social-graph records MAY be used as optional context for quest discovery, recommendation, and creation. A client or community service MAY suggest quests based on explicitly published relationship types, collaborations, affiliations, or shared interests, subject to the visibility and purpose limitations of the source records.
+
+A relationship MUST NOT automatically create a quest, assign a participant, create an obligation, or imply consent to collaborate. Quest creation and participation remain explicit actions governed by the quest's own authorization, visibility, and reward rules. Implementations SHOULD explain, where practical, which disclosed records or criteria informed a recommendation and MUST NOT expose restricted graph data to an unauthorized recommender or recipient.
+
+Communities MAY create quests intended to strengthen relationships or facilitate new connections. Such quests MUST remain optional and MUST NOT be treated as proof that a relationship exists merely because a participant viewed, accepted, or completed a quest.
+
 The social graph and opportunity graph are related but distinct:
 - The **social graph** represents explicitly published relationship assertions, confirmations, affiliations, and interaction history.
 - The **opportunity graph** represents current or time-bounded quests, gatherings, offers, requests, and potential interactions.
@@ -820,6 +826,8 @@ The prototype is accepted only when the following tests pass:
 
 34. Two participants can publish unilateral relationship assertions and separately confirm or decline them; clients distinguish unilateral claims, mutual confirmations, and community-issued records; public indexing occurs only when explicitly authorized; incidental messaging, proximity, or activity-zone participation does not create durable graph relationships.
 
+35. A client or community service can optionally recommend or create a quest using only relationship/social-graph records it is authorized to access; recommendations do not create obligations, reveal restricted graph data, or establish relationships, and quest creation/participation requires explicit action.
+
 ## 18. Phase 0 open questions
 
 These remain deliberately unresolved until research or prototype evidence is available:
@@ -852,6 +860,7 @@ These remain deliberately unresolved until research or prototype evidence is ava
 - Social-graph assertion and mutual-confirmation schemas, relationship types, visibility and consent semantics, decentralized indexing, dispute/revocation, and unsolicited-contact protections.
 - Interoperable core relationship vocabulary, custom relationship-type identifiers and definitions, and safe handling of unknown types across clients.
 - Optional community-scoped relationship intensity/progression models, participant consent and disclosure, and interoperability for unknown progression schemes.
+- Privacy-preserving use of social-graph context for quest recommendations and creation, including purpose limitation, explainability, and safeguards against inferred obligations or unauthorized disclosure.
 
 ## 19. Phase 0 exit criteria
 
@@ -902,6 +911,7 @@ No production application implementation should begin until the Phase 0 exit cri
 | D-028 | Support a decentralized, participant-authored social graph distinguishing unilateral relationship assertions, mutually confirmed relationships, and community-issued records; public indexing is explicit and incidental activity does not create durable relationships | Accepted design direction |
 | D-029 | Use a small interoperable core relationship vocabulary while allowing extensible participant- and community-defined relationship types with stable identifiers and preserved unknown types | Accepted design direction |
 | D-030 | Relationship types are independent by default; optional progression/intensity systems may be defined locally by communities, with no universal hierarchy or score | Accepted design direction |
+| D-031 | Social-graph records may inform optional quest discovery, recommendations, and community quest creation, but never create obligations, imply consent, or bypass graph visibility and quest authorization | Accepted design direction |
 
 ## 21. Research references
 
