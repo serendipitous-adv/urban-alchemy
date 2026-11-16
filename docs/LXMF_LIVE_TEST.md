@@ -55,7 +55,21 @@ Hello from Urban Alchemy!
 /quit
 ```
 
-The recipient can reply to the address printed by your instance.
+The recipient can reply to the address printed by your instance. Incoming
+messages are printed immediately by the running CLI.
+
+For outgoing messages, the CLI reports asynchronous LXMF status updates:
+
+- **Queued:** accepted by the local LXMF router; not yet a delivery claim.
+- **Sent:** transmitted or accepted by the network/propagation service; not
+  necessarily received by the final recipient.
+- **Delivered:** LXMF received a cryptographic delivery proof from the
+  recipient.
+- **Failed:** LXMF exhausted or encountered an unsuccessful delivery attempt.
+
+A reply is still the strongest practical end-to-end interoperability check
+because it also demonstrates that the recipient could identify and message
+your address. A delivery proof does not mean a human read the message.
 
 ## Android: run the UA prototype in Termux
 
