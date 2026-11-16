@@ -49,7 +49,11 @@ class LocalStore(context: Context) : SQLiteOpenHelper(context, "ua_messenger.db"
                 id TEXT PRIMARY KEY,
                 name TEXT NOT NULL,
                 destination TEXT NOT NULL UNIQUE,
-                created_at INTEGER NOT NULL
+                created_at INTEGER NOT NULL,
+                identity_hash TEXT,
+                public_key TEXT,
+                player_id TEXT,
+                verified INTEGER NOT NULL DEFAULT 0
             )""".trimIndent()
         )
         db.execSQL(
