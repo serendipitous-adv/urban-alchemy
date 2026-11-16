@@ -77,6 +77,23 @@ END;
 CREATE INDEX IF NOT EXISTS idx_versions_quest ON quest_versions(quest_id, version DESC);
 CREATE INDEX IF NOT EXISTS idx_attempts_player ON attempts(player_id, status);
 CREATE INDEX IF NOT EXISTS idx_ledger_player ON ledger_entries(player_id, created_at);
+CREATE TABLE IF NOT EXISTS event_records (
+    event_id TEXT PRIMARY KEY,
+    persona_id TEXT NOT NULL,
+    event_type TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    event_json TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_events_order ON event_records(created_at, event_id);
+CREATE INDEX IF NOT EXISTS idx_events_persona ON event_records(persona_id, created_at);
+CREATE TRIGGER IF NOT EXISTS event_records_no_update
+BEFORE UPDATE ON event_records BEGIN
+    SELECT RAISE(ABORT, 'event records are append-only');
+END;
+CREATE TRIGGER IF NOT EXISTS event_records_no_delete
+BEFORE DELETE ON event_records BEGIN
+    SELECT RAISE(ABORT, 'event records are append-only');
+END;
 """
 
 class Database:
