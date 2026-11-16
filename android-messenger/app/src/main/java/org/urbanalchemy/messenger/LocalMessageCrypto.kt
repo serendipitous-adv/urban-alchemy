@@ -34,6 +34,11 @@ object LocalMessageCrypto {
     @Volatile
     internal var keyProvider: () -> SecretKey = ::androidKey
 
+
+    internal fun resetKeyProviderForTests() {
+        keyProvider = ::androidKey
+    }
+
     data class Sealed(val nonce: ByteArray, val ciphertext: ByteArray)
 
     fun encrypt(plaintext: String): Sealed {
