@@ -94,8 +94,8 @@ class PersistentOutbox(context: Context) : SQLiteOpenHelper(context, "ua_transpo
             val ids = mutableListOf<String>()
             db.query(
                 "outbox", arrayOf("message_id"),
-                "state = ? AND next_attempt_at <= ? AND (lease_until IS NULL OR lease_until <= ?)",
-                arrayOf(DeliveryState.QUEUED.name, nowEpochMillis.toString(), nowEpochMillis.toString()),
+                "state = ? AND next_attempt_at <= ? AND (expires_at IS NULL OR expires_at > ?) AND (lease_until IS NULL OR lease_until <= ?)",
+                arrayOf(DeliveryState.QUEUED.name, nowEpochMillis.toString(), nowEpochMillis.toString(), nowEpochMillis.toString()),
                 null, null, "created_at ASC", limit.toString()
             ).use { cursor -> while (cursor.moveToNext()) ids += cursor.getString(0) }
             val claims = mutableListOf<OutboxClaim>()
@@ -104,8 +104,8 @@ class PersistentOutbox(context: Context) : SQLiteOpenHelper(context, "ua_transpo
                 val values = ContentValues().apply { put("lease_token", token); put("lease_until", leaseUntil) }
                 val changed = db.update(
                     "outbox", values,
-                    "message_id = ? AND state = ? AND next_attempt_at <= ? AND (lease_until IS NULL OR lease_until <= ?)",
-                    arrayOf(id, DeliveryState.QUEUED.name, nowEpochMillis.toString(), nowEpochMillis.toString())
+                    "message_id = ? AND state = ? AND next_attempt_at <= ? AND (expires_at IS NULL OR expires_at > ?) AND (lease_until IS NULL OR lease_until <= ?)",
+                    arrayOf(id, DeliveryState.QUEUED.name, nowEpochMillis.toString(), nowEpochMillis.toString(), nowEpochMillis.toString())
                 )
                 if (changed == 1) {
                     val record = find(db, id)
@@ -176,7 +176,7 @@ class PersistentOutbox(context: Context) : SQLiteOpenHelper(context, "ua_transpo
         }
     }
 
-    private fun inTransaction(block: (SQLiteDatabase) -> Any): Any {
+    private fun <T> inTransaction(block: (SQLiteDatabase) -> T): T {
         val db = writableDatabase
         db.beginTransaction()
         try { val result = block(db); db.setTransactionSuccessful(); return result }
