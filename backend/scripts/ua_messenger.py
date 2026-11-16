@@ -9,6 +9,7 @@ from __future__ import annotations
 import argparse
 import sys
 import time
+from datetime import datetime
 from pathlib import Path
 
 
@@ -68,6 +69,26 @@ def main() -> int:
         title = message.title_as_string() if hasattr(message, "title_as_string") else ""
         stamp = "verified" if getattr(message, "signature_validated", False) else "unverified"
         print(f"\n\n[INBOUND {stamp}] {sender} {('— ' + title) if title else ''}\n{body}\n> ", end="", flush=True)
+
+    def status_time():
+        return datetime.now().astimezone().isoformat(timespec="seconds")
+
+    def on_outbound_delivery(message):
+        state = message.state
+        if state == LXMF.LXMessage.DELIVERED:
+            label = "DELIVERED — recipient delivery proof received"
+        elif state == LXMF.LXMessage.SENT:
+            label = "SENT — transmitted/accepted by network; recipient receipt not confirmed"
+        else:
+            label = f"DELIVERY UPDATE — LXMF state {state}"
+        message_id = getattr(message, "hash", None)
+        message_id = message_id.hex() if message_id else "pending"
+        print(f"\\n\\n[{status_time()}] [OUTBOUND {label}] {message_id}\\n> ", end="", flush=True)
+
+    def on_outbound_failed(message):
+        message_id = getattr(message, "hash", None)
+        message_id = message_id.hex() if message_id else "unknown"
+        print(f"\\n\\n[{status_time()}] [OUTBOUND FAILED] {message_id}\\nLXMF could not complete delivery.\\n> ", end="", flush=True)
 
     router.register_delivery_callback(on_message)
     router.announce(source.hash)
@@ -144,8 +165,10 @@ def main() -> int:
         message = LXMF.LXMessage(
             destination, source, line, desired_method=method, include_ticket=True
         )
+        message.register_delivery_callback(on_outbound_delivery)
+        message.register_failed_callback(on_outbound_failed)
         router.handle_outbound(message)
-        print("Queued with LXMF. A reply from the recipient is the end-to-end confirmation.")
+        print(f"[{status_time()}] Queued with LXMF. Waiting for a delivery status update...")
 
     # Reticulum/LXMF own background workers; allow pending writes to settle.
     time.sleep(0.5)
