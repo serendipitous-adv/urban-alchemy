@@ -14,6 +14,9 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import androidx.compose.foundation.layout.Arrangement
@@ -53,6 +56,23 @@ class MainActivity : ComponentActivity() {
         if (!lock.isHeld) lock.acquire()
     }
 
+
+
+    private var lxmfSyncJob: Job? = null
+
+    private fun startLxmfSync(store: LocalStore) {
+        if (lxmfSyncJob?.isActive == true) return
+        lxmfSyncJob = lifecycleScope.launch {
+            while (isActive) {
+                try {
+                    syncLxmf(store)
+                } catch (_: Exception) {
+                    // Keep the encrypted outbox intact and retry on the next cycle.
+                }
+                delay(5_000)
+            }
+        }
+    }
 
     private suspend fun syncLxmf(store: LocalStore): Int = withContext(Dispatchers.IO) {
         if (!Python.isStarted()) Python.start(AndroidPlatform(applicationContext))
@@ -170,6 +190,7 @@ class MainActivity : ComponentActivity() {
                                     lifecycleScope.launch {
                                         try {
                                             syncLxmf(store)
+                                            startLxmfSync(store)
                                             messages = store.listMessages(selected.id)
                                             conversations = store.listConversations()
                                             transportStatus = "LXMF outbox checked. Delivery status reflects transport callbacks."
@@ -213,6 +234,7 @@ class MainActivity : ComponentActivity() {
                                                 ).toString()
                                             }
                                             transportStarted = true
+                                            startLxmfSync(store)
                                             val sendIntent = Intent(Intent.ACTION_SEND).apply {
                                                 type = "text/plain"
                                                 putExtra(Intent.EXTRA_TEXT, invite)
@@ -340,6 +362,7 @@ class MainActivity : ComponentActivity() {
                                             transportStarted = true
                                             transportStatus = "Reticulum started. Checking the durable LXMF outbox..."
                                             syncLxmf(store)
+                                            startLxmfSync(store)
                                             conversations = store.listConversations()
                                             transportStatus = "Reticulum is running. Outbox submitted where routes were available; waiting messages remain queued."
                                         } catch (error: Exception) {
