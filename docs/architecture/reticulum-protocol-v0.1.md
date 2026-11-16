@@ -206,7 +206,9 @@ When a recovery claim is received:
 
 A recovery-key signature proves use of that key; it does not prove that the key remains in the legitimate participant's possession. Recovery therefore establishes a claim of continuity that verifiers and communities can evaluate, not an unquestionable global identity transfer.
 
-The exact notification, challenge window, evidence requirements, and dispute-resolution process remain open for Phase 1 threat modeling and community-policy design.
+Challenge windows and recognition timelines MUST be defined by the relevant Guild, Patch, or record authority; the protocol MUST NOT impose one universal network-wide waiting period. A community MAY apply temporary, proportionate restrictions to sensitive actions while a recovery claim is pending or disputed. The policy SHOULD distinguish low-risk continuity actions from high-impact authority changes, such as governance control or ledger access. Communities SHOULD publish their recovery policy so participants know the applicable process.
+
+The exact notification mechanism, evidence requirements, challenge procedures, and dispute-resolution process remain open for Phase 1 threat modeling and community-policy design.
 
 ### 6.4 Identity, persona, membership, and reputation
 
@@ -514,6 +516,7 @@ The prototype is accepted only when the following tests pass:
 16. Invalid signatures, malformed payloads, unauthorized requests, replayed events, and oversized messages are rejected safely.
 17. The prototype documents which operations are unavailable while disconnected and how unresolved conflicts are represented.
 18. A valid persona recovery-key signature initiates a recorded pending/disputed recovery claim; it does not automatically erase the prior persona or force community recognition. A compromised recovery key can be revoked and replaced by a separately signed master-authorized event when the master key is available.
+19. Recovery challenge windows and temporary restrictions are applied according to the relevant community/record authority's published policy, without a universal network-wide delay.
 
 ## 18. Phase 0 open questions
 
@@ -561,6 +564,7 @@ No production application implementation should begin until the Phase 0 exit cri
 | D-009 | Each persona has an independently generated recovery key certified by the offline master recovery key | Accepted design direction |
 | D-010 | MVP master-key protection uses independent offline backups; threshold/social recovery is deferred | Accepted |
 | D-011 | A persona recovery-key signature initiates a recovery claim; replacement and community recognition are not automatic | Accepted |
+| D-012 | Recovery challenge windows and recognition timelines are community-defined; no universal protocol-wide delay | Accepted |
 
 ## 21. Research references
 
