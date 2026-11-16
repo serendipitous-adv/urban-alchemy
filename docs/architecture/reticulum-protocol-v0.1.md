@@ -771,6 +771,21 @@ Requirements and boundaries:
 
 This architecture treats intelligence as a plural, composable capability of the network rather than a centralized brain. The open protocol defines how components cooperate; participants and communities choose which intelligence they trust and where it operates.
 
+### 13.11 Interoperable multi-agent collaboration — accepted design direction
+
+Independently operated intelligence components MAY communicate and collaborate in multi-agent workflows across player, Guild, Patch, federation, and independent-service scopes. Collaboration MUST remain modular, optional, and governed by explicit delegation rather than implicit trust.
+
+1. An agent MUST act only within the capabilities and task scope explicitly delegated to it. Invocation by another agent MUST NOT automatically grant the caller's full permissions or authority.
+2. Delegation MUST identify the delegator, delegate, permitted actions/data, purpose, scope, and applicable expiry or revocation conditions where practical.
+3. Delegated authority MUST NOT exceed the authority held by the delegating participant, service, or community. An agent MUST NOT further delegate capabilities unless explicitly permitted.
+4. Agents MUST authenticate and validate the provenance and integrity of inter-agent requests and responses. They SHOULD preserve a traceable chain of delegation and material transformations without unnecessarily exposing private internal reasoning or unrelated context.
+5. Each agent remains responsible for enforcing its own access controls and applicable policies; a remote agent's assertion that an action is authorized is not sufficient by itself.
+6. Sensitive actions—including publishing quests, contacting participants, disclosing restricted information, committing community resources, changing governance records, or moving value—MUST require the relevant explicit authorization and MUST NOT be performed solely on the basis of an agent-to-agent recommendation.
+7. Multi-agent workflows SHOULD support bounded tasks, resource/rate limits, cancellation, timeout, and failure isolation. A failed, malicious, or compromised agent MUST NOT automatically compromise the permissions or state of the entire workflow.
+8. Participants and communities SHOULD be able to inspect meaningful action histories, revoke future delegation, and identify which components contributed to an output or action. Revocation cannot retroactively erase information already disclosed or actions validly completed.
+9. Agents MAY use different models, runtimes, protocols, or non-AI methods internally, provided they interoperate through documented UA interfaces and satisfy applicable security and conformance requirements.
+10. Multi-agent collaboration is an optional capability. Core UA participation and quest workflows MUST remain usable without agents or automated orchestration.
+
 ### 13.1 Community autonomy and protocol-level governance boundaries — accepted design direction
 
 UA MUST define shared interoperability, security, and minimum privacy requirements without imposing a universal constitution or a single political structure on every Guild or Patch.
@@ -888,6 +903,8 @@ The prototype is accepted only when the following tests pass:
 
 38. The prototype can discover and invoke at least two independently implemented intelligence components through documented open interfaces at different scopes; components receive only authorized task context, can be replaced or disabled without loss of participant/community data, expose provenance, and cannot grant authority or bypass consent and governance.
 
+39. Two independently implemented agents can complete a bounded multi-agent workflow using explicit, scoped delegation; attempts to exceed delegated authority or perform sensitive actions without required authorization are rejected, delegation can be revoked for future actions, and the workflow preserves verifiable provenance and failure isolation.
+
 ## 18. Phase 0 open questions
 
 These remain deliberately unresolved until research or prototype evidence is available:
@@ -924,6 +941,7 @@ These remain deliberately unresolved until research or prototype evidence is ava
 - Dynamic quest-generation and serendipitous-matchmaking architecture, including context selection, generation provenance, decentralized model/service discovery, mutual-opt-in introductions, abuse resistance, and validation of generated quests.
 - Reactive/proactive generation policy and controls, including participant preferences, authorized context selection, recommendation explainability, feedback, rate limits, and safeguards against unwanted or manipulative suggestions.
 - Open intelligence interface specifications, capability negotiation, service discovery, permission delegation, sandboxing/isolation, component trust and provenance, and cross-implementation conformance tests.
+- Multi-agent delegation-token/credential format, capability attenuation, revocation propagation, workflow tracing, sandboxing, resource budgets, cancellation, and failure-isolation semantics.
 
 ## 19. Phase 0 exit criteria
 
@@ -978,6 +996,7 @@ No production application implementation should begin until the Phase 0 exit cri
 | D-032 | Dynamic quest generation and serendipitous matchmaking are core UA capabilities; independent nodes and communities may generate opportunities from authorized context, with provenance, privacy, mutual opt-in, and ordinary quest validation safeguards | Accepted design direction |
 | D-033 | Quest generation is hybrid: reactive generation responds to expressed needs/offers/interests/requests, while proactive discovery surfaces opportunities from authorized context; suggestions remain controllable, provenance-aware, mutual-opt-in where multi-party, and never create obligations or bypass quest rules | Accepted design direction |
 | D-034 | Open-source modular intelligence is a foundational principle: players, Guilds, Patches, federations, and independent services may plug in replaceable intelligence components through open interfaces, with scoped permissions, provenance, and no mandatory AI or central provider | Accepted design direction |
+| D-035 | Intelligence components may collaborate directly in optional multi-agent workflows across scopes, using explicit bounded delegation, provenance, revocation, and independent authorization for sensitive actions; agents do not inherit authority implicitly | Accepted design direction |
 
 ## 21. Research references
 
