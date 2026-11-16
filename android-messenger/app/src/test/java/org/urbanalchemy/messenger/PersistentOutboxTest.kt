@@ -144,6 +144,16 @@ class PersistentOutboxTest {
         assertEquals(DeliveryState.DELIVERED, store.list().single().state)
     }
 
+
+    @Test fun duplicateReceiptAfterDeliveryIsIdempotent() {
+        store.enqueue(sample())
+        store.transition("message-persist-1", DeliveryState.ROUTER_ACCEPTED)
+        store.transition("message-persist-1", DeliveryState.SENT, nowEpochMillis = 2_000L)
+        val receipt = DeliveryAcknowledgement("message-persist-1", "peer-fingerprint", 3_000L)
+        assertEquals(DeliveryState.DELIVERED, store.acknowledge(receipt).state)
+        assertEquals(DeliveryState.DELIVERED, store.acknowledge(receipt).state)
+    }
+
     @Test fun acknowledgementMovesSentRecordToDelivered() {
         store.enqueue(sample())
         store.transition("message-persist-1", DeliveryState.ROUTER_ACCEPTED)
