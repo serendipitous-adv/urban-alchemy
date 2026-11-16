@@ -93,7 +93,7 @@ class MainActivity : ComponentActivity() {
         var processed = 0
         for (pending in store.pendingOutbound()) {
             val result = JSONObject(
-                module.callAttr("send_message", pending.recipient, pending.text, pending.id).toString()
+                module.callAttr("send_message", pending.recipient, pending.text, pending.id, pending.publicKey ?: "").toString()
             )
             if (result.optBoolean("accepted")) {
                 store.updateOutbound(
