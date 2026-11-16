@@ -18,6 +18,7 @@ interface IncomingMessageStore {
     /** Atomically inserts only the first copy of a message ID. */
     fun insertIfAbsent(message: ReceivedMessage): Boolean
     fun contains(messageId: String): Boolean
+    fun get(messageId: String): ReceivedMessage? = null
 }
 
 /** Verifies, decrypts, and deduplicates inbound authenticated envelopes. */
@@ -108,7 +109,7 @@ class PersistentIncomingMessageStore(context: Context) :
         ).use { return it.moveToFirst() }
     }
 
-    fun get(messageId: String): ReceivedMessage? {
+    override fun get(messageId: String): ReceivedMessage? {
         readableDatabase.query(
             "incoming_messages",
             arrayOf("message_id", "sender_fingerprint", "recipient_fingerprint", "created_at", "nonce", "ciphertext"),
