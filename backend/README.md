@@ -35,6 +35,9 @@ The SQLite file defaults to `backend/urban-alchemy.sqlite3` when started from th
 - A UA persona has a stable random identifier and an independently generated Ed25519 signing key.
 - Persona signing keys are independent of Reticulum identities, browser/passkey credentials, and the offline master recovery key.
 - A signed key-rotation statement can preserve persona continuity when the current key is available. It does not itself establish recovery authority or solve a compromised/lost-key recovery dispute.
+- Signed event envelopes use a canonical JSON representation, a stable content-derived event ID, an explicit schema identifier, and Ed25519 signatures.
+- Event ingestion requires a separately trusted persona-to-public-key binding. A self-presented public key is not enough to establish identity or authority.
+- The local event store is append-only and deduplicates by event ID. Bounded cursor export provides a transport-neutral synchronization primitive; it is not yet a complete peer-to-peer reconciliation protocol.
 - Reticulum identity binding, WebAuthn/passkey login, secure key storage, offline master recovery, and recovery challenges are separate future layers.
 - These primitives are transport-independent: the same signed UA event can be carried over Reticulum, an internet relay, removable media, or another authorized transport.
 
@@ -49,4 +52,4 @@ The SQLite file defaults to `backend/urban-alchemy.sqlite3` when started from th
 - Completion retries return the existing result without issuing duplicate ledger entries.
 - Balances are calculated from ledger entries, not stored as mutable account state.
 
-The current schema and service layer are a foundation, not yet the full alpha. Internet/Reticulum transports, passkey authentication, frontend, moderation, migrations, secure key custody, and multi-node synchronization remain subsequent slices.
+The current schema and service layer are a foundation, not yet the full alpha. Internet/Reticulum transport adapters, passkey authentication, frontend, moderation, migrations, secure key custody, trust/invitation exchange, and full multi-node reconciliation remain subsequent slices.
