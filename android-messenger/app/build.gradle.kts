@@ -5,20 +5,48 @@ plugins {
     id("com.chaquo.python")
 }
 
+val releaseStoreFile = System.getenv("ANDROID_KEYSTORE_PATH")
+val releaseStorePassword = System.getenv("ANDROID_KEYSTORE_PASSWORD")
+val releaseKeyAlias = System.getenv("ANDROID_KEY_ALIAS")
+val releaseKeyPassword = System.getenv("ANDROID_KEY_PASSWORD")
+
 android {
     namespace = "org.urbanalchemy.messenger"
 
     compileSdk = 35
 
     defaultConfig {
-        // Separate package lets this preview install beside the original app.
-        applicationId = "org.urbanalchemy.messenger.preview"
+        // Stable base ID. Debug remains side-by-side as .preview; release is .stable.
+        applicationId = "org.urbanalchemy.messenger"
         minSdk = 26
         targetSdk = 35
-        versionCode = 2
-        versionName = "0.2.0-preview"
+        versionCode = 3
+        versionName = "0.3.0"
         ndk {
             abiFilters += listOf("arm64-v8a")
+        }
+    }
+
+    signingConfigs {
+        create("release") {
+            if (!releaseStoreFile.isNullOrBlank()) {
+                storeFile = file(releaseStoreFile)
+                storePassword = releaseStorePassword
+                keyAlias = releaseKeyAlias
+                keyPassword = releaseKeyPassword
+            }
+        }
+    }
+
+    buildTypes {
+        getByName("debug") {
+            applicationIdSuffix = ".preview"
+            versionNameSuffix = "-preview"
+        }
+        getByName("release") {
+            applicationIdSuffix = ".stable"
+            signingConfig = signingConfigs.getByName("release")
+            isMinifyEnabled = false
         }
     }
 
