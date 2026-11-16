@@ -11,6 +11,7 @@ import org.robolectric.annotation.Config
 import java.security.KeyPair
 import java.security.KeyPairGenerator
 import java.security.spec.ECGenParameterSpec
+import javax.crypto.KeyGenerator
 
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [28])
@@ -53,6 +54,8 @@ class PeerMessageProtocolTest {
     }
 
     @Before fun setUp() {
+        val localQueueKey = KeyGenerator.getInstance("AES").apply { init(256) }.generateKey()
+        LocalMessageCrypto.keyProvider = { localQueueKey }
         context = org.robolectric.RuntimeEnvironment.getApplication()
         context.deleteDatabase("ua_transport_outbox.db")
         aliceSigning = keyPair()
@@ -97,6 +100,7 @@ class PeerMessageProtocolTest {
         bobSession.close()
         dbNames.forEach(context::deleteDatabase)
         context.deleteDatabase("ua_transport_outbox.db")
+        LocalMessageCrypto.keyProvider = { throw IllegalStateException("Android Keystore is unavailable in plain JVM tests.") }
     }
 
     @Test fun encryptedMessagesAndSignedReceiptsFlowBothDirections() {
