@@ -16,6 +16,7 @@ class PeerMessageProtocol(
     private val pinnedPeerSigningPublicKey: java.security.PublicKey,
     private val sendFrame: (ByteArray) -> Unit,
     private val onMessageReceived: (ReceivedMessage) -> Unit = {},
+    private val onDeliveryUpdated: (OutboxRecord) -> Unit = {},
     private val nowMillis: () -> Long = System::currentTimeMillis,
     private val outbox: PersistentOutbox = PersistentOutbox(context),
     private val inbox: IncomingMessageStore = PersistentIncomingMessageStore(context)
@@ -130,9 +131,10 @@ class PeerMessageProtocol(
 
     private fun receiveAcknowledgement(payload: ByteArray) {
         val acknowledgement = SignedDeliveryAcknowledgementCodec.decode(payload)
-        outbox.acknowledgeVerified(
+        val updated = outbox.acknowledgeVerified(
             acknowledgement, localFingerprint, pinnedPeerSigningPublicKey, nowMillis()
         )
+        updated?.let(onDeliveryUpdated)
     }
 
     private fun checkActive() { check(!closed) { "Peer message protocol is closed." } }
