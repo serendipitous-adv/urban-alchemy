@@ -298,6 +298,22 @@ Requirements:
 
 The governing principle is **portable identity without portable authority**. Credential formats, export/import mechanics, revocation checks, and privacy-preserving presentation remain subject to Phase 1 research and interoperability testing.
 
+
+### 6.3.9 Portable reputation evidence and local reputation judgments — accepted design direction
+
+UA MUST distinguish portable evidence about activity or contributions from a community's interpretation of that evidence.
+
+1. A participant MAY selectively present verifiable evidence such as completed quests, contributions, endorsements, issued credentials, or demonstrated skills to another community.
+2. Portable evidence MUST preserve issuer attribution, provenance, scope, relevant context, and any expiration or revocation information needed to evaluate it.
+3. Evidence MUST NOT be presented as a universal reputation score or as an automatically transferable community judgment.
+4. Each receiving Guild, Patch, or other community independently decides whether and how to interpret external evidence under its own published rules.
+5. Community-specific reputation judgments, trust labels, membership standing, and governance assessments remain local unless their issuer explicitly publishes a portable credential with a clearly defined scope.
+6. A participant MUST be able to withhold evidence and choose which records to disclose, subject to any separately stated eligibility rule for a particular benefit or role.
+7. Implementations SHOULD avoid aggregating portable evidence into a single global score, ranking, or cross-community trust metric by default.
+8. Negative judgments and allegations require particular care: systems MUST preserve issuer and context, distinguish verified events from opinions or claims, and MUST NOT silently convert one community's dispute or sanction into a universal status.
+
+The governing distinction is **portable evidence, local interpretation**. Evidence schemas, selective presentation, issuer revocation, expiry, and privacy-preserving aggregation remain subject to Phase 1 research and testing.
+
 ### 6.4 Identity, persona, membership, and reputation
 
 These are separate concepts:
@@ -610,6 +626,7 @@ The prototype is accepted only when the following tests pass:
 22. A participant can disclose a scoped association between personas or between a persona and a specific community, while withholding that relationship from other audiences; revocation affects future reliance but does not erase information already received.
 23. Ordinary Guild participation does not require blanket proof of common control across personas; a narrowly scoped request for a published, proportionate purpose is handled under an explicit community policy and offers a reasonable alternative where practicable.
 24. A persona can be used across communities and carry selectively disclosed, verifiable portable records, while Guild/Patch membership, private data, reputation, SCAF, and other local authority remain subject to the originating and receiving communities' policies.
+25. Portable activity/contribution evidence retains issuer and context, while receiving communities independently interpret it; the system does not create a universal reputation score or automatically transfer local reputation judgments.
 
 ## 18. Phase 0 open questions
 
@@ -625,6 +642,7 @@ These remain deliberately unresolved until research or prototype evidence is ava
 - Scoped persona-relationship assertion/credential format, verifier and audience binding, and revocation/expiry distribution.
 - Privacy-preserving eligibility mechanisms and alternatives to common-control proofs for one-per-participant benefits.
 - Portable credential and record formats, provenance, revocation checking, and participant-controlled export/import semantics across communities.
+- Portable reputation-evidence schemas, issuer attribution, revocation/expiry, selective presentation, and protections against global scoring or context collapse.
 - Event identifier construction and canonicalization.
 - Synchronization summary/anti-entropy algorithm.
 - Storage encryption and secure key storage per platform.
@@ -668,6 +686,7 @@ No production application implementation should begin until the Phase 0 exit cri
 | D-015 | Persona relationships and association disclosures are granular, explicitly scoped, selectively disclosed, and independently revocable; revocation cannot erase information already received | Accepted design direction |
 | D-016 | No blanket common-control proof requirement for ordinary Guild participation; narrowly scoped, proportionate requests require a published purpose and reasonable alternative where practicable | Accepted design direction |
 | D-017 | Persona identity and selectively disclosed verifiable records are portable; community membership, private data, reputation, SCAF, and other authority do not transfer automatically | Accepted design direction |
+| D-018 | Reputation evidence may be selectively portable with provenance; reputation judgments remain local to each community, with no universal score or automatic transfer | Accepted design direction |
 
 ## 21. Research references
 
