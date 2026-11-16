@@ -86,17 +86,21 @@ class PersistentOutbox(context: Context) : SQLiteOpenHelper(context, "ua_transpo
     }
 
     /** Claims due messages in one transaction. Expired leases are safely reclaimable after process death. */
-    fun claimDue(nowEpochMillis: Long, leaseDurationMillis: Long = DEFAULT_LEASE_MILLIS, limit: Int = 10): List<OutboxClaim> {
+    fun claimDue(nowEpochMillis: Long, leaseDurationMillis: Long = DEFAULT_LEASE_MILLIS, limit: Int = 10, recipientIdentity: String? = null): List<OutboxClaim> {
         require(nowEpochMillis >= 0 && leaseDurationMillis > 0 && limit in 1..100)
         val leaseUntil = safeAdd(nowEpochMillis, leaseDurationMillis)
         val db = writableDatabase
         db.beginTransaction()
         try {
             val ids = mutableListOf<String>()
+            val recipientClause = if (recipientIdentity == null) "" else " AND recipient_identity = ?"
+            val selection = "state = ? AND next_attempt_at <= ? AND (expires_at IS NULL OR expires_at > ?) AND (lease_until IS NULL OR lease_until <= ?)" + recipientClause
+            val selectionArgs = mutableListOf(
+                DeliveryState.QUEUED.name, nowEpochMillis.toString(),
+                nowEpochMillis.toString(), nowEpochMillis.toString()
+            ).apply { recipientIdentity?.let(::add) }.toTypedArray()
             db.query(
-                "outbox", arrayOf("message_id"),
-                "state = ? AND next_attempt_at <= ? AND (expires_at IS NULL OR expires_at > ?) AND (lease_until IS NULL OR lease_until <= ?)",
-                arrayOf(DeliveryState.QUEUED.name, nowEpochMillis.toString(), nowEpochMillis.toString(), nowEpochMillis.toString()),
+                "outbox", arrayOf("message_id"), selection, selectionArgs,
                 null, null, "created_at ASC", limit.toString()
             ).use { cursor -> while (cursor.moveToNext()) ids += cursor.getString(0) }
             val claims = mutableListOf<OutboxClaim>()
@@ -105,8 +109,9 @@ class PersistentOutbox(context: Context) : SQLiteOpenHelper(context, "ua_transpo
                 val values = ContentValues().apply { put("lease_token", token); put("lease_until", leaseUntil) }
                 val changed = db.update(
                     "outbox", values,
-                    "message_id = ? AND state = ? AND next_attempt_at <= ? AND (expires_at IS NULL OR expires_at > ?) AND (lease_until IS NULL OR lease_until <= ?)",
-                    arrayOf(id, DeliveryState.QUEUED.name, nowEpochMillis.toString(), nowEpochMillis.toString(), nowEpochMillis.toString())
+                    "message_id = ? AND state = ? AND next_attempt_at <= ? AND (expires_at IS NULL OR expires_at > ?) AND (lease_until IS NULL OR lease_until <= ?)" + recipientClause,
+                    (mutableListOf(id, DeliveryState.QUEUED.name, nowEpochMillis.toString(), nowEpochMillis.toString(), nowEpochMillis.toString())
+                        .apply { recipientIdentity?.let(::add) }).toTypedArray()
                 )
                 if (changed == 1) {
                     val record = find(db, id)
