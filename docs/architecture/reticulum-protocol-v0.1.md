@@ -654,6 +654,31 @@ The mobility design MUST treat safety, privacy, abuse prevention, and participan
 
 The map and mobility features are application services over the common UA protocol. They MUST NOT become mandatory dependencies for Guilds, Patches, or ordinary quest participation.
 
+### 13.7 Ephemeral participant-created activity zones — accepted design direction
+
+UA SHOULD support temporary, participant-created activity zones as opt-in interaction objects on the map and discovery layer. An activity zone expresses an opportunity to gather, collaborate, request or offer help, or coordinate an informal activity. Examples include a spontaneous picnic, a short-term building/collaboration request, an open lounge, or an invitation to meet while passing through an area.
+
+Activity zones MAY be created by an individual persona, Guild, or Patch. Creation MUST NOT require formal event status, Guild membership, Patch affiliation, or quest registration.
+
+Each activity-zone record SHOULD include:
+- A stable object identifier and schema version.
+- The publishing persona or community identity, with only the attribution the publisher chooses to disclose.
+- A concise purpose/category and human-readable description.
+- A start time, optional end time, and mandatory expiry/refresh policy.
+- An audience and discovery scope: public, selected trusted network, or invitation-only.
+- A publisher-selected location representation and precision, which MAY be a broad area, approximate point, or exact meeting point.
+- Participation and contact instructions, including whether responses, approval, or an invitation are required.
+- Optional capacity, accessibility, resource, or safety details.
+- A revocation/update reference and signature/provenance.
+
+The publisher MUST control whether an activity zone is discoverable and at what geographic precision. Exact meeting coordinates and direct contact details MUST NOT be disclosed merely because a broad-area activity zone is discoverable. A participant's interest in or response to an activity zone MUST be separately authorized and MUST NOT automatically reveal their location or persona relationships.
+
+Activity zones MUST be explicitly time-bounded. Expired zones MUST cease to appear as active opportunities in discovery results; implementations MAY retain signed historical records according to applicable retention policy, but MUST clearly distinguish historical records from active opportunities. Publishers MUST be able to revoke or update a zone before expiry. Nodes MUST NOT silently extend its active period.
+
+Publication MUST NOT be treated as proof that the publisher is physically present, continuously available, or obligated to respond. Clients MUST distinguish an advertised opportunity, a participant's explicit response, and verified real-time presence; the protocol does not require or imply continuous location tracking.
+
+Discovery and participation MUST remain decentralized and subject to the same selective publication, authorization, offline operation, and anti-spam protections as other UA interaction objects. An activity zone MUST NOT require a central event service or map provider, and MUST NOT become a prerequisite for ordinary quest, Guild, or Patch participation.
+
 
 ### 13.1 Community autonomy and protocol-level governance boundaries — accepted design direction
 
@@ -760,6 +785,8 @@ The prototype is accepted only when the following tests pass:
 31. A client can display opt-in interaction opportunities alongside geographic records while distinguishing static listings from live presence or availability; private location and contact details remain undisclosed until explicitly authorized.
 32. Two independently operated nodes can publish, discover, negotiate, accept, and cancel a peer-to-peer ride offer/request without a central dispatch service, while protecting precise location until the parties agree to share it.
 
+33. An individual persona, Guild, or Patch can publish, update, and revoke a time-bounded activity zone with selective audience and location precision; authorized peers can discover and respond to it offline or over Reticulum; expired zones disappear from active discovery; publication and response do not imply physical presence or disclose precise location without explicit authorization.
+
 ## 18. Phase 0 open questions
 
 These remain deliberately unresolved until research or prototype evidence is available:
@@ -788,6 +815,7 @@ These remain deliberately unresolved until research or prototype evidence is ava
 - Open-source mapping client and TAK/ATAK interoperability research, including licenses, APIs, data formats, and operational security.
 - Interaction graph/object model, opt-in presence and availability semantics, and privacy-preserving discovery.
 - P2P ride offer/request, matching, consent, cancellation, safety, and abuse-prevention protocol; legal and operational requirements for deployment.
+- Ephemeral activity-zone object schema, expiry/refresh semantics, audience and location-precision controls, response/contact workflow, and abuse/spam protections.
 
 ## 19. Phase 0 exit criteria
 
@@ -834,6 +862,7 @@ No production application implementation should begin until the Phase 0 exit cri
 | D-024 | Federation does not automatically transfer individual membership; players may discover intentionally published federation relationships through a selective community index | Accepted design direction |
 | D-025 | UA should develop an open-source, decentralized map layer with independently controlled geographic publication; TAK/ATAK is a research candidate, not a required dependency | Accepted design direction |
 | D-026 | The UA map represents potential social interactions as well as geography, and should eventually integrate decentralized P2P rideshare as a native optional service | Accepted design direction |
+| D-027 | Support opt-in, time-bounded activity zones created by individuals, Guilds, or Patches, with publisher-controlled audience, location precision, participation, and expiry; publication does not imply presence | Accepted design direction |
 
 ## 21. Research references
 
