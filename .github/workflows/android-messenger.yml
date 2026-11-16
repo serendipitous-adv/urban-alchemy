@@ -57,6 +57,7 @@ jobs:
     steps:
       - name: Check whether signing is configured
         id: signing
+        working-directory: .
         env:
           KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
         run: |
