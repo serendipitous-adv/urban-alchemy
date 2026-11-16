@@ -661,7 +661,7 @@ private fun ContactsScreen(
                         Text(contact.name, style = MaterialTheme.typography.titleMedium)
                         Text(contact.destination, style = MaterialTheme.typography.bodySmall)
                         Text(
-                            "Unverified · address saved locally",
+                            if (contact.verified) "Verified Reticulum identity" else "Unverified · address saved locally",
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
