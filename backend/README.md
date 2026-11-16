@@ -37,7 +37,10 @@ The SQLite file defaults to `backend/urban-alchemy.sqlite3` when started from th
 - A signed key-rotation statement can preserve persona continuity when the current key is available. It does not itself establish recovery authority or solve a compromised/lost-key recovery dispute.
 - Signed event envelopes use a canonical JSON representation, a stable content-derived event ID, an explicit schema identifier, and Ed25519 signatures.
 - Event ingestion requires a separately trusted persona-to-public-key binding. A self-presented public key is not enough to establish identity or authority.
-- The local event store is append-only and deduplicates by event ID. Bounded cursor export provides a transport-neutral synchronization primitive; it is not yet a complete peer-to-peer reconciliation protocol.
+- The local event store is append-only and deduplicates by event ID.
+- The transport-neutral sync engine exports bounded event batches, requires explicit acknowledgement before advancing outbound cursors, verifies the authenticated peer's trusted persona keys on receipt, and atomically stores received events with the receive cursor.
+- Sync cursors are durable per peer and direction. Repeated batches are safe; malformed, unordered, oversized, untrusted, or cursor-regressing batches are rejected.
+- The sync engine does not authenticate the peer connection, exchange trust, grant membership, resolve domain conflicts, or open a network connection. Reticulum and internet adapters must provide authenticated peer context and use the same engine.
 - Reticulum identity binding, WebAuthn/passkey login, secure key storage, offline master recovery, and recovery challenges are separate future layers.
 - These primitives are transport-independent: the same signed UA event can be carried over Reticulum, an internet relay, removable media, or another authorized transport.
 
@@ -52,4 +55,4 @@ The SQLite file defaults to `backend/urban-alchemy.sqlite3` when started from th
 - Completion retries return the existing result without issuing duplicate ledger entries.
 - Balances are calculated from ledger entries, not stored as mutable account state.
 
-The current schema and service layer are a foundation, not yet the full alpha. Internet/Reticulum transport adapters, passkey authentication, frontend, moderation, migrations, secure key custody, trust/invitation exchange, and full multi-node reconciliation remain subsequent slices.
+The current schema and service layer are a foundation, not yet the full alpha. Internet/Reticulum transport adapters, passkey authentication, frontend, moderation, migrations, secure key custody, trust/invitation exchange, domain-specific conflict handling, and live multi-node transport integration remain subsequent slices.
