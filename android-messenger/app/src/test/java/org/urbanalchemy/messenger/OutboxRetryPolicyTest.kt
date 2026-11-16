@@ -19,7 +19,7 @@ class OutboxRetryPolicyTest {
         assertEquals(OutboxRetryPolicy.Decision.RetryAt(104_000L, 2),
             OutboxRetryPolicy.decide(record(attemptCount = 1), 100_000L, 100_000L))
         assertEquals(OutboxRetryPolicy.Decision.RetryAt(1_064_000L, 6),
-            OutboxRetryPolicy.decide(record(attemptCount = 5), 1_000_000L, 1_000_000L))
+            OutboxRetryPolicy.decide(record(attemptCount = 5), 1_000_000L, 1_000_000L, maxRetries = 6))
         assertEquals(OutboxRetryPolicy.Decision.RetryAt(1_900_000L, 15),
             OutboxRetryPolicy.decide(record(attemptCount = 14), 1_000_000L, 1_000_000L, maxRetries = 20))
     }
