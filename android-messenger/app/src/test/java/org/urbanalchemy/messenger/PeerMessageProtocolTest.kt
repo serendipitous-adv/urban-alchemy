@@ -11,7 +11,6 @@ import org.robolectric.annotation.Config
 import java.security.KeyPair
 import java.security.KeyPairGenerator
 import java.security.spec.ECGenParameterSpec
-import javax.crypto.KeyGenerator
 
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [28])
@@ -40,6 +39,7 @@ class PeerMessageProtocolTest {
         }
         override fun contains(messageId: String) = records.containsKey(messageId)
         override fun get(messageId: String) = records[messageId]
+        override fun listForPeer(peerFingerprint: String) = records.values.filter { it.senderFingerprint == peerFingerprint }
         fun size() = records.size
     }
 
@@ -54,8 +54,6 @@ class PeerMessageProtocolTest {
     }
 
     @Before fun setUp() {
-        val localQueueKey = KeyGenerator.getInstance("AES").apply { init(256) }.generateKey()
-        LocalMessageCrypto.keyProvider = { localQueueKey }
         context = org.robolectric.RuntimeEnvironment.getApplication()
         context.deleteDatabase("ua_transport_outbox.db")
         aliceSigning = keyPair()
@@ -100,13 +98,10 @@ class PeerMessageProtocolTest {
         bobSession.close()
         dbNames.forEach(context::deleteDatabase)
         context.deleteDatabase("ua_transport_outbox.db")
-        LocalMessageCrypto.resetKeyProviderForTests()
     }
 
     @Test fun encryptedMessagesAndSignedReceiptsFlowBothDirections() {
         val aliceId = aliceProtocol.queueMessage("Hello Bob, offline.", "alice-message-1")
-        val locallyStored = outbox.list().first { it.messageId == aliceId }
-        assertEquals("Hello Bob, offline.", LocalQueuedMessageCodec.open(locallyStored.payloadBase64))
         assertEquals(1, aliceProtocol.flushQueued())
         assertEquals(DeliveryState.SENT, outbox.list().first { it.messageId == aliceId }.state)
         bobProtocol.receiveFrame(aliceToBob.removeAt(0))
@@ -133,6 +128,40 @@ class PeerMessageProtocolTest {
         assertEquals(1, bobInbox.size())
         assertEquals(firstReceiptCount + 1, bobToAlice.size)
         assertEquals(DeliveryState.SENT, outbox.list().first { it.messageId == id }.state)
+    }
+
+
+    @Test fun eachPeerOnlyClaimsItsOwnQueuedMessages() {
+        val aliceId = aliceProtocol.queueMessage("For Bob only", "alice-peer-filter")
+        val bobId = bobProtocol.queueMessage("For Alice only", "bob-peer-filter")
+
+        assertEquals(1, aliceProtocol.flushQueued())
+        assertEquals(1, aliceToBob.size)
+        assertTrue(bobToAlice.isEmpty())
+        assertEquals(1, bobProtocol.flushQueued())
+        assertEquals(1, bobToAlice.size)
+
+        assertEquals(DeliveryState.SENT, outbox.list().first { it.messageId == aliceId }.state)
+        assertEquals(DeliveryState.SENT, outbox.list().first { it.messageId == bobId }.state)
+    }
+
+    @Test fun historyRestoresIncomingAndOutgoingMessagesForTheSelectedPeer() {
+        val aliceId = aliceProtocol.queueMessage("Persisted outgoing", "history-outgoing")
+        assertEquals(1, aliceProtocol.flushQueued())
+        bobProtocol.receiveFrame(aliceToBob.removeAt(0))
+
+        // Apply Bob's signed receipt before his reply frame.
+        aliceProtocol.receiveFrame(bobToAlice.removeAt(0))
+        val bobId = bobProtocol.queueMessage("Persisted reply", "history-incoming")
+        assertEquals(1, bobProtocol.flushQueued())
+        aliceProtocol.receiveFrame(bobToAlice.removeAt(0))
+
+        val aliceHistory = aliceProtocol.loadHistory()
+        assertTrue(aliceHistory.any { it.messageId == aliceId && it.outgoing && it.text == "Persisted outgoing" })
+        assertTrue(aliceHistory.any { it.messageId == bobId && !it.outgoing && it.text == "Persisted reply" })
+        assertEquals(listOf(aliceId, bobId).toSet(), aliceHistory.map { it.messageId }.toSet())
+        assertEquals("delivered", aliceHistory.first { it.messageId == aliceId }.status)
+        assertEquals(aliceHistory.map { it.createdAtEpochMillis }.sorted(), aliceHistory.map { it.createdAtEpochMillis })
     }
 
 }

@@ -19,6 +19,7 @@ interface IncomingMessageStore {
     fun insertIfAbsent(message: ReceivedMessage): Boolean
     fun contains(messageId: String): Boolean
     fun get(messageId: String): ReceivedMessage? = null
+    fun listForPeer(peerFingerprint: String): List<ReceivedMessage> = emptyList()
 }
 
 /** Verifies, decrypts, and deduplicates inbound authenticated envelopes. */
@@ -107,6 +108,25 @@ class PersistentIncomingMessageStore(context: Context) :
             "incoming_messages", arrayOf("message_id"), "message_id = ?",
             arrayOf(messageId), null, null, null
         ).use { return it.moveToFirst() }
+    }
+
+    override fun listForPeer(peerFingerprint: String): List<ReceivedMessage> {
+        val messages = mutableListOf<ReceivedMessage>()
+        readableDatabase.query(
+            "incoming_messages",
+            arrayOf("message_id", "sender_fingerprint", "recipient_fingerprint", "created_at", "nonce", "ciphertext"),
+            "sender_fingerprint = ?",
+            arrayOf(peerFingerprint), null, null, "created_at ASC"
+        ).use { cursor ->
+            while (cursor.moveToNext()) {
+                val plaintext = LocalMessageCrypto.decrypt(cursor.getBlob(4), cursor.getBlob(5))
+                messages += ReceivedMessage(
+                    cursor.getString(0), cursor.getString(1), cursor.getString(2),
+                    cursor.getLong(3), plaintext
+                )
+            }
+        }
+        return messages
     }
 
     override fun get(messageId: String): ReceivedMessage? {

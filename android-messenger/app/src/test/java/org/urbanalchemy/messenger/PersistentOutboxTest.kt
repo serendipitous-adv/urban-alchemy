@@ -105,6 +105,45 @@ class PersistentOutboxTest {
         assertEquals(1, store.claimDue(1_000L).size)
     }
 
+
+    @Test fun sentMessageWithoutReceiptIsRequeuedWithBoundedBackoff() {
+        store.enqueue(sample())
+        store.transition("message-persist-1", DeliveryState.ROUTER_ACCEPTED)
+        store.transition("message-persist-1", DeliveryState.SENT, nowEpochMillis = 2_000L)
+
+        assertEquals(emptyList<OutboxRecord>(), store.recoverUnacknowledged(31_999L, 30_000L))
+        val recovered = store.recoverUnacknowledged(32_000L, 30_000L).single()
+        assertEquals(DeliveryState.QUEUED, recovered.state)
+        assertEquals(1, recovered.attemptCount)
+        assertEquals(34_000L, recovered.nextAttemptAtEpochMillis)
+        assertNull(recovered.sentAtEpochMillis)
+
+        assertEquals(emptyList<OutboxClaim>(), store.claimDue(33_999L))
+        assertEquals(1, store.claimDue(34_000L).size)
+    }
+
+
+    @Test fun lateSignedReceiptWinsOverScheduledRetry() {
+        store.enqueue(sample())
+        store.transition("message-persist-1", DeliveryState.ROUTER_ACCEPTED)
+        store.transition("message-persist-1", DeliveryState.SENT, nowEpochMillis = 2_000L)
+        store.recoverUnacknowledged(32_000L, 30_000L).single()
+        val delivered = store.acknowledge(
+            DeliveryAcknowledgement("message-persist-1", "peer-fingerprint", 33_000L)
+        )
+        assertEquals(DeliveryState.DELIVERED, delivered.state)
+        assertEquals(emptyList<OutboxClaim>(), store.claimDue(60_000L))
+    }
+
+    @Test fun signedReceiptBeforeTimeoutPreventsRetry() {
+        store.enqueue(sample())
+        store.transition("message-persist-1", DeliveryState.ROUTER_ACCEPTED)
+        store.transition("message-persist-1", DeliveryState.SENT, nowEpochMillis = 2_000L)
+        store.acknowledge(DeliveryAcknowledgement("message-persist-1", "peer-fingerprint", 3_000L))
+        assertEquals(emptyList<OutboxRecord>(), store.recoverUnacknowledged(60_000L, 30_000L))
+        assertEquals(DeliveryState.DELIVERED, store.list().single().state)
+    }
+
     @Test fun acknowledgementMovesSentRecordToDelivered() {
         store.enqueue(sample())
         store.transition("message-persist-1", DeliveryState.ROUTER_ACCEPTED)
