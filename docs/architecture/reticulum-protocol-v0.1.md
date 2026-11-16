@@ -673,6 +673,10 @@ Temporary activity-zone responses and other ephemeral interactions MUST NOT auto
 
 Public social-graph discovery SHOULD be supported by independent, decentralized indexes. No central index is authoritative or mandatory, and index inclusion MUST NOT confer legitimacy, membership, trustworthiness, or permission to contact. Implementations SHOULD provide controls to limit unsolicited contact, block publishers, and filter or hide unwanted assertions.
 
+Relationship types SHOULD use a small interoperable vocabulary for common concepts while allowing communities and participants to define additional types. Custom types MUST carry a stable type identifier, human-readable label, and optional definition or usage guidance. Implementations MUST preserve unknown type identifiers and SHOULD display an intelligible fallback label rather than discarding or silently remapping them.
+
+Custom relationship types MUST NOT alter the underlying authorization, consent, or confirmation semantics. A playful or locally defined label (for example, "fellow wanderer" or "creative accomplice") is descriptive metadata, not proof of a legally or socially recognized status. Type definitions MAY be published by individuals or communities and selectively adopted by clients; no central taxonomy authority is required.
+
 The social graph and opportunity graph are related but distinct:
 - The **social graph** represents explicitly published relationship assertions, confirmations, affiliations, and interaction history.
 - The **opportunity graph** represents current or time-bounded quests, gatherings, offers, requests, and potential interactions.
@@ -844,6 +848,7 @@ These remain deliberately unresolved until research or prototype evidence is ava
 - P2P ride offer/request, matching, consent, cancellation, safety, and abuse-prevention protocol; legal and operational requirements for deployment.
 - Ephemeral activity-zone object schema, expiry/refresh semantics, audience and location-precision controls, response/contact workflow, and abuse/spam protections.
 - Social-graph assertion and mutual-confirmation schemas, relationship types, visibility and consent semantics, decentralized indexing, dispute/revocation, and unsolicited-contact protections.
+- Interoperable core relationship vocabulary, custom relationship-type identifiers and definitions, and safe handling of unknown types across clients.
 
 ## 19. Phase 0 exit criteria
 
@@ -892,6 +897,7 @@ No production application implementation should begin until the Phase 0 exit cri
 | D-026 | The UA map represents potential social interactions as well as geography, and should eventually integrate decentralized P2P rideshare as a native optional service | Accepted design direction |
 | D-027 | Support opt-in, time-bounded activity zones created by individuals, Guilds, or Patches, with publisher-controlled audience, location precision, participation, and expiry; publication does not imply presence | Accepted design direction |
 | D-028 | Support a decentralized, participant-authored social graph distinguishing unilateral relationship assertions, mutually confirmed relationships, and community-issued records; public indexing is explicit and incidental activity does not create durable relationships | Accepted design direction |
+| D-029 | Use a small interoperable core relationship vocabulary while allowing extensible participant- and community-defined relationship types with stable identifiers and preserved unknown types | Accepted design direction |
 
 ## 21. Research references
 
