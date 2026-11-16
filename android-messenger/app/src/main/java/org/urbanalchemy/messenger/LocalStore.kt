@@ -42,7 +42,7 @@ data class LocalMessage(
     val status: String
 )
 
-class LocalStore(context: Context) : SQLiteOpenHelper(context, "ua_messenger.db", null, 5) {
+class LocalStore(context: Context) : SQLiteOpenHelper(context, "ua_messenger.db", null, 6) {
     override fun onCreate(db: SQLiteDatabase) {
         db.execSQL(
             """CREATE TABLE contacts (
@@ -93,6 +93,8 @@ class LocalStore(context: Context) : SQLiteOpenHelper(context, "ua_messenger.db"
                 status TEXT NOT NULL,
                 nonce BLOB,
                 ciphertext BLOB,
+                lxmf_hash TEXT,
+                remote_hash TEXT,
                 FOREIGN KEY(conversation_id) REFERENCES conversations(id)
             )""".trimIndent()
         )
@@ -122,6 +124,11 @@ class LocalStore(context: Context) : SQLiteOpenHelper(context, "ua_messenger.db"
             db.execSQL("ALTER TABLE contacts ADD COLUMN public_key TEXT")
             db.execSQL("ALTER TABLE contacts ADD COLUMN player_id TEXT")
             db.execSQL("ALTER TABLE contacts ADD COLUMN verified INTEGER NOT NULL DEFAULT 0")
+        }
+        if (oldVersion < 6) {
+            db.execSQL("ALTER TABLE messages ADD COLUMN lxmf_hash TEXT")
+            db.execSQL("ALTER TABLE messages ADD COLUMN remote_hash TEXT")
+            db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS messages_lxmf_hash ON messages(lxmf_hash) WHERE lxmf_hash IS NOT NULL")
         }
     }
 
@@ -329,6 +336,94 @@ class LocalStore(context: Context) : SQLiteOpenHelper(context, "ua_messenger.db"
         }
         writableDatabase.insertOrThrow("messages", null, values)
         return id
+    }
+
+
+    data class PendingOutbound(val id: String, val recipient: String, val text: String)
+
+    @Synchronized
+    fun pendingOutbound(limit: Int = 20): List<PendingOutbound> {
+        val result = mutableListOf<PendingOutbound>()
+        readableDatabase.rawQuery(
+            """SELECT m.id, p.destination, m.nonce, m.ciphertext
+                FROM messages m
+                JOIN conversations c ON c.id = m.conversation_id
+                JOIN contacts p ON p.id = c.contact_id
+                WHERE m.status IN ('QUEUED', 'WAITING_FOR_ROUTE', 'WAITING_FOR_IDENTITY')
+                ORDER BY m.created_at ASC LIMIT ?""",
+            arrayOf(limit.coerceIn(1, 100).toString())
+        ).use { cursor ->
+            while (cursor.moveToNext()) {
+                result += PendingOutbound(
+                    cursor.getString(0), cursor.getString(1),
+                    LocalMessageCrypto.decrypt(cursor.getBlob(2), cursor.getBlob(3))
+                )
+            }
+        }
+        return result
+    }
+
+    @Synchronized
+    fun updateOutbound(id: String, status: String, lxmfHash: String? = null) {
+        val allowed = setOf("QUEUED", "WAITING_FOR_ROUTE", "WAITING_FOR_IDENTITY", "SUBMITTED", "SENT", "DELIVERED", "FAILED", "REJECTED")
+        require(status in allowed) { "Unsupported message state." }
+        val values = ContentValues().apply {
+            put("status", status)
+            if (lxmfHash != null) put("lxmf_hash", lxmfHash)
+        }
+        writableDatabase.update("messages", values, "id = ?", arrayOf(id))
+    }
+
+    @Synchronized
+    fun updateByLxmfHash(lxmfHash: String, status: String) {
+        val allowed = setOf("SUBMITTED", "SENT", "DELIVERED", "FAILED", "REJECTED")
+        require(status in allowed) { "Unsupported delivery state." }
+        writableDatabase.update(
+            "messages", ContentValues().apply { put("status", status) },
+            "lxmf_hash = ?", arrayOf(lxmfHash)
+        )
+    }
+
+    @Synchronized
+    fun saveInbound(source: String, lxmfHash: String, text: String, timestamp: Long): Boolean {
+        require(Regex("^[0-9a-f]{32}$").matches(source)) { "Invalid inbound LXMF source." }
+        require(lxmfHash.isNotBlank()) { "Inbound LXMF message has no deduplication hash." }
+        val exists = readableDatabase.rawQuery(
+            "SELECT id FROM messages WHERE lxmf_hash = ?",
+            arrayOf(lxmfHash)
+        ).use { it.moveToFirst() }
+        if (exists) return false
+        val contact = readableDatabase.rawQuery(
+            "SELECT id, name FROM contacts WHERE destination = ?",
+            arrayOf(source)
+        ).use { cursor ->
+            if (cursor.moveToFirst()) cursor.getString(0) to cursor.getString(1) else null
+        }
+        val conversationId = if (contact != null) {
+            readableDatabase.rawQuery(
+                "SELECT id FROM conversations WHERE contact_id = ? ORDER BY id LIMIT 1",
+                arrayOf(contact.first)
+            ).use { cursor ->
+                if (cursor.moveToFirst()) cursor.getLong(0) else insertConversation(contact.second, contact.first)
+            }
+        } else {
+            insertConversation("Message request · ${source.take(8)}", null)
+        }
+        val sealed = LocalMessageCrypto.encrypt(text)
+        val id = UUID.randomUUID().toString()
+        val values = ContentValues().apply {
+            put("id", id)
+            put("conversation_id", conversationId)
+            put("body", "")
+            put("created_at", timestamp)
+            put("status", if (contact != null) "RECEIVED" else "REQUEST")
+            put("nonce", sealed.nonce)
+            put("ciphertext", sealed.ciphertext)
+            put("lxmf_hash", lxmfHash)
+            put("remote_hash", source)
+        }
+        writableDatabase.insertOrThrow("messages", null, values)
+        return true
     }
 
     fun addLocalMessage(conversationId: Long, text: String): String {
