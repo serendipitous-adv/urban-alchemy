@@ -563,7 +563,9 @@ A Patch is a geographic or social area of participation and does not imply owner
 
 A Guild may participate in multiple Patches; a Patch may contain or connect multiple Guilds.
 
-Membership, governance, and access policies are community-defined. UA MUST NOT require a central organization to approve the creation of a Guild or Patch.
+Membership, governance, and access policies are community-defined. Guild and Patch creation is permissionless: anyone MAY create a Guild or Patch without approval from an existing Guild, Patch, or UA authority. Creation does not require registration with a central organization or inclusion in a directory.
+
+A community's legitimacy is established through its participants, relationships, and recognition by others—not through central registration. Optional directories MAY index published communities to aid discovery, but directory listing or omission MUST NOT determine whether a Guild or Patch exists or is legitimate. A community SHOULD be able to publish its signing-key identity and governance policies so that other participants can verify its claims and make informed decisions about engagement.
 
 
 ### 13.1 Community autonomy and protocol-level governance boundaries — accepted design direction
@@ -680,6 +682,7 @@ These remain deliberately unresolved until research or prototype evidence is ava
 - Portable reputation-evidence schemas, issuer attribution, revocation/expiry, selective presentation, and protections against global scoring or context collapse.
 - Data classification, retention schedules, deletion/withdrawal propagation, tombstone semantics, and policy/legal constraints for distributed records.
 - Governance interoperability: representation of community constitutions/policies, explicit cross-community agreements, and dispute procedures without introducing a central override authority.
+- Optional community publication/verification profile: signing-key identity, governance-policy descriptor, and directory indexing semantics that preserve permissionless creation.
 - Event identifier construction and canonicalization.
 - Synchronization summary/anti-entropy algorithm.
 - Storage encryption and secure key storage per platform.
@@ -726,6 +729,7 @@ No production application implementation should begin until the Phase 0 exit cri
 | D-018 | Reputation evidence may be selectively portable with provenance; reputation judgments remain local to each community, with no universal score or automatic transfer | Accepted design direction |
 | D-019 | Participants control personal data and future disclosure; distributed signed records may persist under purpose-limited published retention policies, and global erasure is not promised | Accepted design direction |
 | D-020 | Common interoperability/security protocol with plural, autonomous Guild and Patch governance; shared templates are voluntary and no central UA authority has unilateral override power | Accepted design direction |
+| D-021 | Permissionless Guild and Patch creation; directories aid discovery but do not confer legitimacy or determine existence | Accepted |
 
 ## 21. Research references
 
