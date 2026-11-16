@@ -568,6 +568,22 @@ Membership, governance, and access policies are community-defined. Guild and Pat
 A community's legitimacy is established through its participants, relationships, and recognition by others—not through central registration. Optional directories MAY index published communities to aid discovery, but directory listing or omission MUST NOT determine whether a Guild or Patch exists or is legitimate. A community SHOULD be able to publish its signing-key identity and governance policies so that other participants can verify its claims and make informed decisions about engagement.
 
 
+
+### 13.2 Guild and Patch identity — accepted design direction
+
+Guilds and Patches establish their own cryptographic identities without registration with a central UA authority.
+
+1. A community's initial signing key MUST be generated and controlled by its founding participants or their chosen local process.
+2. The community identifier MUST be derived from its initial public-key material using a versioned, deterministic identifier construction. The exact derivation and canonical encoding remain subject to Phase 1 specification and testing.
+3. The community identifier MUST remain stable if the community later changes its display name or rotates its active signing key.
+4. A human-readable community name MAY be changed and MUST NOT be assumed globally unique. Two or more communities MAY use the same display name; clients SHOULD present sufficient identifier or provenance information to distinguish them.
+5. A community SHOULD publish a signed genesis record that identifies its community identifier, initial public key, chosen display name, protocol version, and any initial governance-policy or service-descriptor references it chooses to disclose.
+6. The genesis record and subsequent key-transition records MUST be verifiable without consulting a central registry. A directory MAY index or cache these records but MUST NOT be their source of authority.
+7. Key rotation MUST be represented by a verifiable transition authorized under the community's published key-management policy. Recovery and disputed key transitions MUST follow a community-defined process; no directory or UA operator may unilaterally replace a community's signing authority.
+8. The protocol MUST distinguish a community's cryptographic continuity from its social legitimacy. A valid signature establishes control of a key under the applicable verification rules; it does not prove that every participant recognizes the community or its governance decisions.
+
+The initial key, stable identifier, mutable display name, and signed genesis record provide a verifiable origin without creating a central namespace or approval process.
+
 ### 13.1 Community autonomy and protocol-level governance boundaries — accepted design direction
 
 UA MUST define shared interoperability, security, and minimum privacy requirements without imposing a universal constitution or a single political structure on every Guild or Patch.
@@ -682,7 +698,7 @@ These remain deliberately unresolved until research or prototype evidence is ava
 - Portable reputation-evidence schemas, issuer attribution, revocation/expiry, selective presentation, and protections against global scoring or context collapse.
 - Data classification, retention schedules, deletion/withdrawal propagation, tombstone semantics, and policy/legal constraints for distributed records.
 - Governance interoperability: representation of community constitutions/policies, explicit cross-community agreements, and dispute procedures without introducing a central override authority.
-- Optional community publication/verification profile: signing-key identity, governance-policy descriptor, and directory indexing semantics that preserve permissionless creation.
+- Exact community identifier derivation, genesis-record schema, canonical encoding, and community key-rotation/recovery policy representation.
 - Event identifier construction and canonicalization.
 - Synchronization summary/anti-entropy algorithm.
 - Storage encryption and secure key storage per platform.
@@ -730,6 +746,7 @@ No production application implementation should begin until the Phase 0 exit cri
 | D-019 | Participants control personal data and future disclosure; distributed signed records may persist under purpose-limited published retention policies, and global erasure is not promised | Accepted design direction |
 | D-020 | Common interoperability/security protocol with plural, autonomous Guild and Patch governance; shared templates are voluntary and no central UA authority has unilateral override power | Accepted design direction |
 | D-021 | Permissionless Guild and Patch creation; directories aid discovery but do not confer legitimacy or determine existence | Accepted |
+| D-022 | Guilds and Patches establish self-generated cryptographic identities with stable key-derived identifiers, mutable non-unique names, and verifiable signed genesis records | Accepted design direction |
 
 ## 21. Research references
 
