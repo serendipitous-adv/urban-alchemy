@@ -5,9 +5,9 @@ Native Kotlin and Jetpack Compose prototype for the standalone, offline-first me
 ## Implemented in this prototype
 
 - Persistent EC device identity in Android Keystore; the private key stays on-device.
-- Local conversations and message history.
+- Local conversations and message history, including encrypted private notes that never leave the device.
 - Message bodies encrypted at rest using AES-256-GCM with a key held in Android Keystore.
-- Durable local outgoing messages shown honestly as `QUEUED`.
+- Durable recipient-linked outgoing messages shown honestly as `QUEUED`; private-thread notes use `LOCAL_ONLY` and are never transmitted.
 - Embedded Reticulum/LXMF runtime startup with a separate persistent delivery identity.
 - Local AutoInterface discovery configuration and explicit LXMF address announcement.
 - Local contact book with names and 32-character hexadecimal LXMF destination hashes.
@@ -42,7 +42,7 @@ The debug APK is produced at `app/build/outputs/apk/debug/app-debug.apk`. The re
 
 1. Install and launch the debug APK.
 2. Confirm the local identity fingerprint remains stable after restart.
-3. Create a local conversation and send a test message.
+3. Create a private local conversation and save a test note; confirm it is marked `LOCAL_ONLY`.
 4. Add a contact using a 32-character hexadecimal LXMF destination.
 5. Start a conversation with that contact; confirm the recipient address is visible and marked unverified.
 6. Force-stop/reopen the app; confirm contacts, conversations, and messages remain.
