@@ -85,6 +85,8 @@ class WifiDirectPeerManager(
                 activity.registerReceiver(receiver, filter)
             }
         }
+        // Reattach to an existing group when the panel/activity is recreated.
+        if (hasPermission()) requestConnectionInfo()
     }
 
     fun discoverPeers() {
