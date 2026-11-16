@@ -44,6 +44,18 @@ The terms **MUST**, **MUST NOT**, **SHOULD**, **SHOULD NOT**, and **MAY** are us
 
 Where this document labels a choice **provisional**, it is a design candidate that must be validated in Phase 1 before it becomes a stable interoperability requirement.
 
+### 2.1 Applicability and conformance scope
+
+Normative requirements apply at the scope of the component or capability they describe:
+
+- **Protocol-wide invariants** apply to every conforming UA node or client whenever the relevant operation occurs. These include message integrity, authorization boundaries, selective replication, and the prohibition on treating transport, discovery, or directory roles as sources of application authority.
+- **Service- or feature-specific requirements** apply to an implementation only when it implements, advertises, or claims conformance to that service or feature. A node is not required to host every UA service, support every optional interface, or implement every application feature.
+- Requirements in long-term capability sections describe the behavior and safeguards of those capabilities when implemented. They do not make those capabilities Phase 1A/1B deliverables unless they are explicitly included in Sections 17.1 or 17.2.
+- A **MUST NOT** that protects another participant's consent, privacy, authorization, or authority remains applicable to any implementation performing the relevant operation, even when the surrounding feature is optional.
+- Phase acceptance criteria in Section 17 define the release gates for the stated phase. Future validation targets are not implied release gates.
+
+A component MUST NOT claim conformance to a feature-specific service while omitting that service's applicable normative requirements. Implementations SHOULD document which optional services and capability profiles they support.
+
 ## 3. Governing principles
 
 1. **No central dependency:** no central server is required for basic operation.
@@ -151,7 +163,7 @@ The participant's legal identity is not required by the protocol.
 
 ### 6.3 Key lifecycle
 
-Phase 1 MUST test persona creation, secure persistence, backup, rotation, loss, revocation, and recovery.
+The initial identity implementation MUST support persistent persona identity and authenticated signing needed by Phase 1A. A later identity-hardening phase SHOULD validate the complete lifecycle: secure backup, rotation, loss, revocation, and recovery.
 
 At minimum, the protocol MUST distinguish:
 
@@ -685,7 +697,7 @@ A relationship MUST NOT automatically create a quest, assign a participant, crea
 
 Communities MAY create quests intended to strengthen relationships or facilitate new connections. Such quests MUST remain optional and MUST NOT be treated as proof that a relationship exists merely because a participant viewed, accepted, or completed a quest.
 
-Dynamic quest generation and serendipitous matchmaking are core UA capabilities, not merely optional interface conveniences. UA SHOULD enable clients and community-controlled services to compose new opportunities from explicitly available context, including participant-declared interests, skills, needs, offers, relationships, local conditions, active quests, activity zones, and community-defined goals.
+Dynamic quest generation and serendipitous matchmaking are core long-term UA capabilities, not merely optional interface conveniences. The UA ecosystem SHOULD enable clients and community-controlled services to compose new opportunities from explicitly available context, including participant-declared interests, skills, needs, offers, relationships, local conditions, active quests, activity zones, and community-defined goals. This capability is not a Phase 1A/1B implementation requirement.
 
 Generation MAY produce individual suggestions, collaborative invitations, proposed quest templates, or complete draft quests. It MAY identify potentially complementary participants or communities and suggest an introduction or shared activity. Generated content MUST be distinguishable from participant-authored content, identify its generating mechanism or responsible service where practical, and remain subject to the same authorization, visibility, consent, and provenance rules as other UA records.
 
@@ -729,7 +741,7 @@ Discovery and participation MUST remain decentralized and subject to the same se
 
 ### 13.9 Hybrid reactive and proactive quest generation — accepted design direction
 
-Dynamic quest generation and serendipitous matchmaking are core UA capabilities. UA MUST support both reactive generation, responding to explicitly expressed needs, offers, interests, requests, and participant activity, and proactive discovery, where independently operated nodes or community-controlled services identify potentially valuable opportunities before a participant explicitly requests a quest.
+The UA capability model MUST permit both reactive generation, responding to explicitly expressed needs, offers, interests, requests, and participant activity, and proactive discovery, where independently operated nodes or community-controlled services identify potentially valuable opportunities before a participant explicitly requests a quest. A generation service MAY implement either mode or both; support for this capability is not a Phase 1A/1B release gate.
 
 1. Reactive generation MAY transform an expressed need, offer, interest, request, or community objective into one or more quest proposals.
 2. Proactive generation MAY identify potential collaborations, complementary interests or capabilities, unmet needs, useful gatherings, and other opportunities from context the generating service is authorized to access.
