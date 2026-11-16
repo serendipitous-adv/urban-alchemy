@@ -2,7 +2,6 @@ package org.urbanalchemy.messenger
 
 import java.io.DataInputStream
 import java.io.DataOutputStream
-import java.io.EOFException
 import java.io.IOException
 import java.net.Socket
 
@@ -63,11 +62,15 @@ class SocketFrameTransport(
         try {
             val input = DataInputStream(socket.getInputStream())
             while (!closed) {
-                val length = try {
-                    input.readInt()
-                } catch (_: EOFException) {
-                    break
+                val first = input.read()
+                if (first == -1) break
+                val second = input.read()
+                val third = input.read()
+                val fourth = input.read()
+                if (second == -1 || third == -1 || fourth == -1) {
+                    throw IOException("Truncated peer frame header.")
                 }
+                val length = (first shl 24) or (second shl 16) or (third shl 8) or fourth
                 if (length !in 1..MAX_FRAME_BYTES) {
                     throw IOException("Peer frame length is outside the allowed range.")
                 }
