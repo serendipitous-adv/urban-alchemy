@@ -97,7 +97,7 @@ jobs:
       - name: Assemble signed stable APK
         if: steps.signing.outputs.enabled == 'true'
         env:
-          ANDROID_KEYSTORE_PATH: ${{ runner.temp }}/urban-alchemy-release.jks
+          ANDROID_KEYSTORE_PATH: ${{ runner.temp }}/urban-alchemy-release.p12
         run: gradle --no-daemon :app:assembleRelease
       - name: Upload stable APK
         if: steps.signing.outputs.enabled == 'true'
