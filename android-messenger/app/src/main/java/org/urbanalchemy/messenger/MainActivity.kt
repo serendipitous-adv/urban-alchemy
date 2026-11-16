@@ -145,7 +145,13 @@ class MainActivity : ComponentActivity() {
                                                     ).toString()
                                             }
                                             val info = JSONObject(result)
-                                            lxmfAddress = info.getString("destination")
+                                            val destination = info.getString("destination")
+                                            store.bindReticulumIdentity(
+                                                info.getString("reticulum_identity_hash"),
+                                                info.getString("reticulum_public_key"),
+                                                destination
+                                            )
+                                            lxmfAddress = destination
                                             transportStarted = true
                                             transportStatus = "Reticulum started. LXMF identity is saved on this device; no peer has been confirmed yet."
                                         } catch (error: Exception) {
