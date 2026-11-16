@@ -74,7 +74,7 @@ class SimulatedPeerMessageRoundTripTest {
             aliceEphemeral, now + 1_000L, true
         )
         bobSession = AuthenticatedSessionEstablisher(replayGuard("bob")).establish(
-            bobReceivedOffer, aliceReceivedOffer, aliceSigning.public, bobSigning.public,
+            bobReceivedOffer, bobOwnOffer, aliceSigning.public, bobSigning.public,
             bobEphemeral, now + 1_000L, false
         )
     }
@@ -91,7 +91,6 @@ class SimulatedPeerMessageRoundTripTest {
         senderSigning: KeyPair,
         recipientSigning: KeyPair,
         senderInbox: MemoryInbox,
-        senderIsAlice: Boolean,
         messageId: String,
         body: String
     ) {
@@ -148,11 +147,11 @@ class SimulatedPeerMessageRoundTripTest {
         val bobInbox = MemoryInbox()
         exchange(
             aliceSession, bobSession, aliceSigning, bobSigning,
-            bobInbox, true, "alice-to-bob-001", "Hello Bob, offline."
+            bobInbox, "alice-to-bob-001", "Hello Bob, offline."
         )
         exchange(
             bobSession, aliceSession, bobSigning, aliceSigning,
-            aliceInbox, false, "bob-to-alice-001", "Hello Alice, received."
+            aliceInbox, "bob-to-alice-001", "Hello Alice, received."
         )
         assertEquals(1, bobInbox.messages.size)
         assertEquals(1, aliceInbox.messages.size)
