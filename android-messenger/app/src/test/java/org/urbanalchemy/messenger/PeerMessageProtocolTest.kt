@@ -101,6 +101,8 @@ class PeerMessageProtocolTest {
 
     @Test fun encryptedMessagesAndSignedReceiptsFlowBothDirections() {
         val aliceId = aliceProtocol.queueMessage("Hello Bob, offline.", "alice-message-1")
+        val locallyStored = outbox.list().first { it.messageId == aliceId }
+        assertEquals("Hello Bob, offline.", LocalQueuedMessageCodec.open(locallyStored.payloadBase64))
         assertEquals(1, aliceProtocol.flushQueued())
         assertEquals(DeliveryState.SENT, outbox.list().first { it.messageId == aliceId }.state)
         bobProtocol.receiveFrame(aliceToBob.removeAt(0))
