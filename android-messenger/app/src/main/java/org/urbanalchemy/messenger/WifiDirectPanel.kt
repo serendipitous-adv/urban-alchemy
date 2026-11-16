@@ -13,8 +13,6 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.MaterialTheme
@@ -86,7 +84,7 @@ fun WifiDirectPanel() {
         }
     }
     val manager = managerResult.getOrNull()
-    if (manager == null) managerError = managerResult.exceptionOrNull()?.message ?: "Wi-Fi Direct is unavailable."
+    val managerUnavailable = managerResult.exceptionOrNull()?.message ?: if (manager == null) "Wi-Fi Direct is unavailable." else null
 
     DisposableEffect(manager) {
         manager?.let {
@@ -123,9 +121,7 @@ fun WifiDirectPanel() {
         ) {
             Text("Direct offline connection", style = MaterialTheme.typography.titleSmall)
             Text(status, style = MaterialTheme.typography.bodySmall)
-            if (managerError != null) {
-                Text(managerError!!, color = MaterialTheme.colorScheme.error)
-            }
+            (managerError ?: managerUnavailable)?.let { Text(it, color = MaterialTheme.colorScheme.error) }
             Button(
                 onClick = {
                     if (activity.checkSelfPermission(permission) == PackageManager.PERMISSION_GRANTED) {
