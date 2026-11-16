@@ -77,28 +77,31 @@ class UrbanAlchemy:
 
     def accept_quest(self, quest_id: str, player_id: str, version_id: str | None = None) -> str:
         attempt_id = self._id()
-        with self.db.transaction() as conn:
-            self._require_active_player(conn, player_id)
-            quest = conn.execute("SELECT creator_id, published FROM quests WHERE id = ?", (quest_id,)).fetchone()
-            if quest is None or not quest["published"]:
-                raise DomainError("Quest is not available.")
-            if quest["creator_id"] == player_id:
-                raise DomainError("Creators cannot accept their own quests.")
-            if version_id is None:
-                version = conn.execute(
-                    "SELECT id FROM quest_versions WHERE quest_id = ? ORDER BY version DESC LIMIT 1", (quest_id,)
-                ).fetchone()
-                version_id = version["id"]
-            else:
-                version = conn.execute(
-                    "SELECT id FROM quest_versions WHERE quest_id = ? AND id = ?", (quest_id, version_id)
-                ).fetchone()
-                if version is None:
-                    raise DomainError("Requested quest version does not exist.")
-            conn.execute(
-                "INSERT INTO attempts(id, quest_id, version_id, player_id, status) VALUES (?, ?, ?, ?, 'accepted')",
-                (attempt_id, quest_id, version_id, player_id),
-            )
+        try:
+            with self.db.transaction() as conn:
+                self._require_active_player(conn, player_id)
+                quest = conn.execute("SELECT creator_id, published FROM quests WHERE id = ?", (quest_id,)).fetchone()
+                if quest is None or not quest["published"]:
+                    raise DomainError("Quest is not available.")
+                if quest["creator_id"] == player_id:
+                    raise DomainError("Creators cannot accept their own quests.")
+                if version_id is None:
+                    version = conn.execute(
+                        "SELECT id FROM quest_versions WHERE quest_id = ? ORDER BY version DESC LIMIT 1", (quest_id,)
+                    ).fetchone()
+                    version_id = version["id"]
+                else:
+                    version = conn.execute(
+                        "SELECT id FROM quest_versions WHERE quest_id = ? AND id = ?", (quest_id, version_id)
+                    ).fetchone()
+                    if version is None:
+                        raise DomainError("Requested quest version does not exist.")
+                conn.execute(
+                    "INSERT INTO attempts(id, quest_id, version_id, player_id, status) VALUES (?, ?, ?, ?, 'accepted')",
+                    (attempt_id, quest_id, version_id, player_id),
+                )
+        except sqlite3.IntegrityError as exc:
+            raise DomainError("This player already has an attempt for this quest.") from exc
         return attempt_id
 
     def complete_quest(self, attempt_id: str, player_id: str, evidence: str | None = None) -> CompletionResult:
