@@ -1,6 +1,11 @@
 package org.urbanalchemy.messenger
 
 import android.os.Bundle
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
+import android.net.wifi.WifiManager
+import org.json.JSONObject
 import com.chaquo.python.android.AndroidPlatform
 import com.chaquo.python.Python
 import androidx.activity.ComponentActivity
@@ -32,6 +37,25 @@ import java.text.DateFormat
 import java.util.Date
 
 class MainActivity : ComponentActivity() {
+    private var reticulumMulticastLock: WifiManager.MulticastLock? = null
+
+    private fun acquireReticulumMulticastLock() {
+        val wifi = applicationContext.getSystemService(Context.WIFI_SERVICE) as WifiManager
+        val lock = reticulumMulticastLock ?: wifi.createMulticastLock("UrbanAlchemyReticulum").also {
+            it.setReferenceCounted(false)
+            reticulumMulticastLock = it
+        }
+        if (!lock.isHeld) lock.acquire()
+    }
+
+    override fun onDestroy() {
+        try {
+            reticulumMulticastLock?.let { if (it.isHeld) it.release() }
+        } catch (_: Exception) { }
+        reticulumMulticastLock = null
+        super.onDestroy()
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val store = LocalStore(this)
@@ -43,6 +67,9 @@ class MainActivity : ComponentActivity() {
             var messages by remember { mutableStateOf(emptyList<LocalMessage>()) }
             var showContacts by remember { mutableStateOf(false) }
             var runtimeStatus by remember { mutableStateOf("Not checked") }
+            var transportStatus by remember { mutableStateOf("Not started") }
+            var lxmfAddress by remember { mutableStateOf<String?>(null) }
+            var transportStarted by remember { mutableStateOf(false) }
 
             MaterialTheme {
                 Surface(modifier = Modifier.fillMaxSize()) {
@@ -96,6 +123,61 @@ class MainActivity : ComponentActivity() {
                                     }
                                 }
                             },
+                            transportStatus = transportStatus,
+                            lxmfAddress = lxmfAddress,
+                            transportStarted = transportStarted,
+                            onStartTransport = {
+                                try {
+                                    acquireReticulumMulticastLock()
+                                    transportStatus = "Starting Reticulum and loading the persistent LXMF identity..."
+                                    lifecycleScope.launch {
+                                        try {
+                                            val result = withContext(Dispatchers.IO) {
+                                                if (!Python.isStarted()) {
+                                                    Python.start(AndroidPlatform(applicationContext))
+                                                }
+                                                Python.getInstance()
+                                                    .getModule("transport_probe")
+                                                    .callAttr(
+                                                        "start_runtime",
+                                                        filesDir.resolve("reticulum").absolutePath,
+                                                        "Urban Alchemy"
+                                                    ).toString()
+                                            }
+                                            val info = JSONObject(result)
+                                            lxmfAddress = info.getString("destination")
+                                            transportStarted = true
+                                            transportStatus = "Reticulum started. LXMF identity is saved on this device; no peer has been confirmed yet."
+                                        } catch (error: Exception) {
+                                            transportStatus = "FAILED: ${error.javaClass.simpleName}: ${error.message}"
+                                        }
+                                    }
+                                } catch (error: Exception) {
+                                    transportStatus = "FAILED: ${error.javaClass.simpleName}: ${error.message}"
+                                }
+                            },
+                            onAnnounce = {
+                                transportStatus = "Submitting LXMF announce..."
+                                lifecycleScope.launch {
+                                    transportStatus = try {
+                                        withContext(Dispatchers.IO) {
+                                            Python.getInstance()
+                                                .getModule("transport_probe")
+                                                .callAttr("announce")
+                                                .toString()
+                                        }
+                                        "Announce submitted. This does not prove a peer received it."
+                                    } catch (error: Exception) {
+                                        "FAILED: ${error.javaClass.simpleName}: ${error.message}"
+                                    }
+                                }
+                            },
+                            onCopyAddress = {
+                                lxmfAddress?.let { address ->
+                                    val clipboard = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                                    clipboard.setPrimaryClip(ClipData.newPlainText("LXMF address", address))
+                                }
+                            },
                             onOpen = { id ->
                                 selectedId = id
                                 messages = store.listMessages(id)
@@ -120,6 +202,12 @@ private fun MessengerHome(
     contactCount: Int,
     runtimeStatus: String,
     onCheckRuntime: () -> Unit,
+    transportStatus: String,
+    lxmfAddress: String?,
+    transportStarted: Boolean,
+    onStartTransport: () -> Unit,
+    onAnnounce: () -> Unit,
+    onCopyAddress: () -> Unit,
     onOpen: (Long) -> Unit,
     onCreateConversation: (String) -> Unit,
     onContacts: () -> Unit
@@ -144,6 +232,22 @@ private fun MessengerHome(
                 Text(runtimeStatus, style = MaterialTheme.typography.bodySmall)
                 Button(onClick = onCheckRuntime) { Text("Check embedded runtime") }
                 Text("Import test only. Does not connect, announce, or send messages.", style = MaterialTheme.typography.bodySmall)
+            }
+        }
+        Card(modifier = Modifier.fillMaxWidth()) {
+            Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("Reticulum / LXMF", style = MaterialTheme.typography.titleSmall)
+                Text(transportStatus, style = MaterialTheme.typography.bodySmall)
+                if (lxmfAddress != null) {
+                    Text("Your LXMF address", style = MaterialTheme.typography.labelMedium)
+                    Text(lxmfAddress, style = MaterialTheme.typography.bodySmall)
+                    TextButton(onClick = onCopyAddress) { Text("Copy address") }
+                }
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Button(onClick = onStartTransport, enabled = !transportStarted) { Text("Start transport") }
+                    Button(onClick = onAnnounce, enabled = transportStarted) { Text("Announce") }
+                }
+                Text("Starts local Reticulum discovery and creates a persistent LXMF identity. Announce makes the address discoverable; neither action sends a message.", style = MaterialTheme.typography.bodySmall)
             }
         }
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
