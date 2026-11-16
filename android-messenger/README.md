@@ -1,26 +1,49 @@
 # Urban Alchemy Messenger (Android)
 
-Native Kotlin/Jetpack Compose client for the standalone, offline-first messenger MVP.
+Native Kotlin and Jetpack Compose prototype for the standalone, offline-first messenger MVP.
 
-## Current scaffold
+## Implemented in this prototype
 
-- Creates a persistent EC device keypair in Android Keystore.
-- Displays a short SHA-256 identity fingerprint.
-- Persists local conversation records in SQLite.
-- Requires no account, internet connection, Reticulum node, or backend service.
+- Creates a persistent EC device identity in Android Keystore and displays its SHA-256 fingerprint.
+- Creates local conversations and displays their message history.
+- Stores message content encrypted at rest using AES-256-GCM with a key held in Android Keystore.
+- Displays locally stored messages and their honest `QUEUED` state.
+- Requires no account, internet connection, Reticulum node, or backend service for these local features.
 
-This is an early development scaffold, not yet a secure messaging release. Message encryption, contact verification, message composition, outbound queue processing, and radio transports are not implemented yet.
+## Important limitations
+
+This is an early local prototype, not yet a secure person-to-person messaging release.
+
+- The message encryption key is local to this installation. It is not end-to-end encryption between two users.
+- There is no contact exchange, peer authentication, network transport, delivery acknowledgement, or reply path yet.
+- `QUEUED` means saved on this device only. It does not mean sent or delivered.
+- A second Android device is needed to validate real device-to-device transport, but is not needed to test local conversation and storage behavior.
 
 ## Build
 
-Open this directory in Android Studio with Android SDK 35 and JDK 17, or build with Gradle:
+Requirements: JDK 17, Android SDK 35, and Gradle 8.9.
+
+From this directory:
 
 ```sh
-./gradlew :app:assembleDebug
+gradle --no-daemon :app:assembleDebug
 ```
 
-A Gradle wrapper is not included in this first scaffold. Generate it with a compatible Gradle installation before command-line builds.
+The debug APK is produced at:
 
-## Device testing
+```
+app/build/outputs/apk/debug/app-debug.apk
+```
 
-The first available phone can verify identity persistence and local conversation storage across app restarts. A second Android device is required to validate real Wi-Fi Direct or Bluetooth exchange.
+The repository CI workflow builds the APK and uploads it as the `urban-alchemy-messenger-debug` artifact when the build succeeds.
+
+## First-device test
+
+1. Install and launch the debug APK.
+2. Confirm a local identity fingerprint appears.
+3. Create a conversation and send a test message.
+4. Confirm its state is `queued`, not delivered.
+5. Close and reopen the app; confirm the conversation and message remain.
+6. Repeat while in airplane mode to verify these local features do not require connectivity.
+
+Do not use real secrets or sensitive conversations in this development build.
