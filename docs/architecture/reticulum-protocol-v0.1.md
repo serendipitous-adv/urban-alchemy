@@ -654,6 +654,31 @@ The mobility design MUST treat safety, privacy, abuse prevention, and participan
 
 The map and mobility features are application services over the common UA protocol. They MUST NOT become mandatory dependencies for Guilds, Patches, or ordinary quest participation.
 
+### 13.8 Participant-authored social graph and relationship assertions — accepted design direction
+
+UA SHOULD support a publicly discoverable, decentralized social graph composed of participant-authored relationship and interaction records. The graph is not a canonical account of social reality; it is a collection of claims, confirmations, and disclosures made by the participants or communities concerned.
+
+The protocol MUST distinguish at least:
+- **Unilateral assertion:** one participant publishes a claim about their own relationship or interaction with another persona or community (for example, "I collaborated with this person"). The assertion MUST be attributed to its publisher and MUST NOT imply endorsement, confirmation, or consent by the other party.
+- **Mutually confirmed relationship:** the relevant parties separately authorize a shared relationship record or confirm the same scoped assertion. Clients MUST make the confirmation status and the confirming parties clear.
+- **Community-issued record:** a Guild, Patch, or other authorized community publishes a claim within its own authority, such as membership or participation in a community activity. Such a record MUST identify its issuer and scope; it MUST NOT imply that the subject has consented to broader disclosure unless that consent is separately established.
+
+Relationship and interaction records MUST have explicit types, provenance, visibility, and scope. They MAY be public, selectively disclosed, or private to the publisher and intended recipients. Public searchability MUST be an explicit publication choice, not an automatic consequence of ordinary participation, message exchange, co-presence, or proximity.
+
+The protocol MUST NOT infer friendship, affiliation, endorsement, attendance, or collaboration solely from message traffic, shared location, co-attendance, or other incidental metadata. A participant MUST be able to distinguish a publisher's claim from a mutually confirmed relationship and from an issuer-attested community record.
+
+A participant MUST NOT be able to publish or alter another participant's confirmation, endorsement, membership, or consent state. Participants MUST be able to decline, dispute, or revoke their own confirmation and control future disclosure of records under their authority. Revocation or deletion MUST NOT be represented as erasing copies already received or independently retained; applicable provenance and retention rules continue to apply.
+
+Temporary activity-zone responses and other ephemeral interactions MUST NOT automatically create durable social-graph edges. A participant MAY separately choose to publish a lasting interaction or relationship record. The graph MUST support pseudonymous personas and selective disclosure without requiring a public common-control link between a participant's personas.
+
+Public social-graph discovery SHOULD be supported by independent, decentralized indexes. No central index is authoritative or mandatory, and index inclusion MUST NOT confer legitimacy, membership, trustworthiness, or permission to contact. Implementations SHOULD provide controls to limit unsolicited contact, block publishers, and filter or hide unwanted assertions.
+
+The social graph and opportunity graph are related but distinct:
+- The **social graph** represents explicitly published relationship assertions, confirmations, affiliations, and interaction history.
+- The **opportunity graph** represents current or time-bounded quests, gatherings, offers, requests, and potential interactions.
+
+Clients MUST NOT silently convert an opportunity or response into a durable social relationship.
+
 ### 13.7 Ephemeral participant-created activity zones — accepted design direction
 
 UA SHOULD support temporary, participant-created activity zones as opt-in interaction objects on the map and discovery layer. An activity zone expresses an opportunity to gather, collaborate, request or offer help, or coordinate an informal activity. Examples include a spontaneous picnic, a short-term building/collaboration request, an open lounge, or an invitation to meet while passing through an area.
@@ -787,6 +812,8 @@ The prototype is accepted only when the following tests pass:
 
 33. An individual persona, Guild, or Patch can publish, update, and revoke a time-bounded activity zone with selective audience and location precision; authorized peers can discover and respond to it offline or over Reticulum; expired zones disappear from active discovery; publication and response do not imply physical presence or disclose precise location without explicit authorization.
 
+34. Two participants can publish unilateral relationship assertions and separately confirm or decline them; clients distinguish unilateral claims, mutual confirmations, and community-issued records; public indexing occurs only when explicitly authorized; incidental messaging, proximity, or activity-zone participation does not create durable graph relationships.
+
 ## 18. Phase 0 open questions
 
 These remain deliberately unresolved until research or prototype evidence is available:
@@ -816,6 +843,7 @@ These remain deliberately unresolved until research or prototype evidence is ava
 - Interaction graph/object model, opt-in presence and availability semantics, and privacy-preserving discovery.
 - P2P ride offer/request, matching, consent, cancellation, safety, and abuse-prevention protocol; legal and operational requirements for deployment.
 - Ephemeral activity-zone object schema, expiry/refresh semantics, audience and location-precision controls, response/contact workflow, and abuse/spam protections.
+- Social-graph assertion and mutual-confirmation schemas, relationship types, visibility and consent semantics, decentralized indexing, dispute/revocation, and unsolicited-contact protections.
 
 ## 19. Phase 0 exit criteria
 
@@ -863,6 +891,7 @@ No production application implementation should begin until the Phase 0 exit cri
 | D-025 | UA should develop an open-source, decentralized map layer with independently controlled geographic publication; TAK/ATAK is a research candidate, not a required dependency | Accepted design direction |
 | D-026 | The UA map represents potential social interactions as well as geography, and should eventually integrate decentralized P2P rideshare as a native optional service | Accepted design direction |
 | D-027 | Support opt-in, time-bounded activity zones created by individuals, Guilds, or Patches, with publisher-controlled audience, location precision, participation, and expiry; publication does not imply presence | Accepted design direction |
+| D-028 | Support a decentralized, participant-authored social graph distinguishing unilateral relationship assertions, mutually confirmed relationships, and community-issued records; public indexing is explicit and incidental activity does not create durable relationships | Accepted design direction |
 
 ## 21. Research references
 
