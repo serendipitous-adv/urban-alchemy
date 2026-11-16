@@ -39,6 +39,7 @@ class PeerMessageProtocolTest {
         }
         override fun contains(messageId: String) = records.containsKey(messageId)
         override fun get(messageId: String) = records[messageId]
+        fun size() = records.size
     }
 
     private fun keyPair(): KeyPair = KeyPairGenerator.getInstance("EC").apply {
@@ -123,11 +124,9 @@ class PeerMessageProtocolTest {
         bobProtocol.receiveFrame(frame)
         val firstReceiptCount = bobToAlice.size
         bobProtocol.receiveFrame(frame)
-        assertEquals(1, bobInbox.recordsSize())
+        assertEquals(1, bobInbox.size())
         assertEquals(firstReceiptCount + 1, bobToAlice.size)
         assertEquals(DeliveryState.SENT, outbox.list().first { it.messageId == id }.state)
     }
 
-    private fun MemoryInbox.recordsSize() = if (get("alice-message-1") != null) 1 else
-        if (get("duplicate-message") != null) 1 else 0
 }
