@@ -240,6 +240,19 @@ class LocalStore(context: Context) : SQLiteOpenHelper(context, "ua_messenger.db"
     }
 
     fun addQueuedMessage(conversationId: Long, text: String): String {
+        require(text.isNotBlank()) { "Message cannot be empty." }
+        val recipient = readableDatabase.rawQuery(
+            """SELECT p.destination
+                FROM conversations c
+                LEFT JOIN contacts p ON p.id = c.contact_id
+                WHERE c.id = ?""",
+            arrayOf(conversationId.toString())
+        ).use { cursor ->
+            if (cursor.moveToFirst()) cursor.getString(0) else null
+        }
+        require(recipient != null && Regex("^[0-9a-f]{32}$").matches(recipient)) {
+            "A valid saved LXMF recipient is required before a message can be queued."
+        }
         val sealed = LocalMessageCrypto.encrypt(text)
         val id = UUID.randomUUID().toString()
         val values = ContentValues().apply {
