@@ -340,13 +340,13 @@ class LocalStore(context: Context) : SQLiteOpenHelper(context, "ua_messenger.db"
     }
 
 
-    data class PendingOutbound(val id: String, val recipient: String, val text: String)
+    data class PendingOutbound(val id: String, val recipient: String, val text: String, val publicKey: String?)
 
     @Synchronized
     fun pendingOutbound(limit: Int = 20): List<PendingOutbound> {
         val result = mutableListOf<PendingOutbound>()
         readableDatabase.rawQuery(
-            """SELECT m.id, p.destination, m.nonce, m.ciphertext
+            """SELECT m.id, p.destination, m.nonce, m.ciphertext, p.public_key
                 FROM messages m
                 JOIN conversations c ON c.id = m.conversation_id
                 JOIN contacts p ON p.id = c.contact_id
@@ -357,7 +357,8 @@ class LocalStore(context: Context) : SQLiteOpenHelper(context, "ua_messenger.db"
             while (cursor.moveToNext()) {
                 result += PendingOutbound(
                     cursor.getString(0), cursor.getString(1),
-                    LocalMessageCrypto.decrypt(cursor.getBlob(2), cursor.getBlob(3))
+                    LocalMessageCrypto.decrypt(cursor.getBlob(2), cursor.getBlob(3)),
+                    cursor.getString(4)
                 )
             }
         }
