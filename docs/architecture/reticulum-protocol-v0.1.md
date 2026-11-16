@@ -189,6 +189,25 @@ Replacing a lost master key and re-establishing its authority is an unresolved, 
 
 Backup procedures, secure storage media, geographic separation, and compromise response SHOULD be documented in the implementation's operational security guidance.
 
+### 6.3.3 Compromised persona recovery key — accepted policy
+
+A valid signature from a persona recovery key MUST be treated as authorization to initiate a recovery claim, not as an automatic, irreversible replacement of the persona's identity or authority.
+
+When a recovery claim is received:
+
+1. The claim MUST identify the affected persona, the proposed replacement persona/key, the recovery authorization being exercised, and sufficient freshness/replay-protection data.
+2. The claim MUST be cryptographically verified against the persona recovery authorization previously certified by the offline master key.
+3. The affected persona and recovery authorization SHOULD be marked as **recovery pending** or **recovery disputed** in the relevant local/community records. Implementations MUST preserve the signed claim and its provenance.
+4. A valid claim MUST NOT, by itself, erase the prior persona, retroactively invalidate its signed history, or force every Guild, Patch, directory, or ledger authority to recognize the replacement.
+5. Each relevant community or record authority MUST apply its own published recovery-recognition and dispute policy before transferring membership, reputation, governance rights, SCAF records, or other authority.
+6. Where the offline master recovery key is available, it MAY issue a signed revocation of the compromised persona recovery key and certify a replacement recovery key. This action MUST be recorded as a distinct, verifiable event.
+7. If the master key is unavailable, the persona recovery-key claim can still be evaluated under the relevant community's recovery policy, but it MUST NOT be represented as a master-authorized revocation or as proof that the recovery key was not stolen.
+8. Conflicting claims, including activity from the old persona key after a recovery claim, MUST be retained as evidence and handled under explicit dispute policy rather than resolved by silent last-write-wins behavior.
+
+A recovery-key signature proves use of that key; it does not prove that the key remains in the legitimate participant's possession. Recovery therefore establishes a claim of continuity that verifiers and communities can evaluate, not an unquestionable global identity transfer.
+
+The exact notification, challenge window, evidence requirements, and dispute-resolution process remain open for Phase 1 threat modeling and community-policy design.
+
 ### 6.4 Identity, persona, membership, and reputation
 
 These are separate concepts:
@@ -494,6 +513,7 @@ The prototype is accepted only when the following tests pass:
 15. The workflow succeeds on an isolated local network with no internet connection.
 16. Invalid signatures, malformed payloads, unauthorized requests, replayed events, and oversized messages are rejected safely.
 17. The prototype documents which operations are unavailable while disconnected and how unresolved conflicts are represented.
+18. A valid persona recovery-key signature initiates a recorded pending/disputed recovery claim; it does not automatically erase the prior persona or force community recognition. A compromised recovery key can be revoked and replaced by a separately signed master-authorized event when the master key is available.
 
 ## 18. Phase 0 open questions
 
@@ -540,6 +560,7 @@ No production application implementation should begin until the Phase 0 exit cri
 | D-008 | Reticulum-native application networking; internet is optional transport | Accepted |
 | D-009 | Each persona has an independently generated recovery key certified by the offline master recovery key | Accepted design direction |
 | D-010 | MVP master-key protection uses independent offline backups; threshold/social recovery is deferred | Accepted |
+| D-011 | A persona recovery-key signature initiates a recovery claim; replacement and community recognition are not automatic | Accepted |
 
 ## 21. Research references
 
