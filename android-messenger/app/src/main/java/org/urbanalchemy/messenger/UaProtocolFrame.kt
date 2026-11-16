@@ -45,13 +45,13 @@ class UaProtocolFrame(type: Type, payload: ByteArray) {
     }
 
     companion object {
-        const val MAX_PAYLOAD_BYTES = SocketFrameTransport.MAX_FRAME_BYTES
+        const val MAX_PAYLOAD_BYTES = SocketFrameTransport.MAX_FRAME_BYTES - 13
         private const val VERSION = 1
         private const val HEADER_BYTES = 13
         private val MAGIC = byteArrayOf(0x55, 0x41, 0x50, 0x46) // UAPF
 
         fun decode(encoded: ByteArray): UaProtocolFrame {
-            require(encoded.size in (HEADER_BYTES + 1)..(HEADER_BYTES + MAX_PAYLOAD_BYTES)) {
+            require(encoded.size in (HEADER_BYTES + 1)..SocketFrameTransport.MAX_FRAME_BYTES) {
                 "UA frame size is outside the allowed range."
             }
             DataInputStream(ByteArrayInputStream(encoded)).use { input ->
