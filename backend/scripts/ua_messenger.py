@@ -83,12 +83,12 @@ def main() -> int:
             label = f"DELIVERY UPDATE — LXMF state {state}"
         message_id = getattr(message, "hash", None)
         message_id = message_id.hex() if message_id else "pending"
-        print(f"\\n\\n[{status_time()}] [OUTBOUND {label}] {message_id}\\n> ", end="", flush=True)
+        print(f"\n\n[{status_time()}] [OUTBOUND {label}] {message_id}\n> ", end="", flush=True)
 
     def on_outbound_failed(message):
         message_id = getattr(message, "hash", None)
         message_id = message_id.hex() if message_id else "unknown"
-        print(f"\\n\\n[{status_time()}] [OUTBOUND FAILED] {message_id}\\nLXMF could not complete delivery.\\n> ", end="", flush=True)
+        print(f"\n\n[{status_time()}] [OUTBOUND FAILED] {message_id}\nLXMF could not complete delivery.\n> ", end="", flush=True)
 
     router.register_delivery_callback(on_message)
     router.announce(source.hash)
