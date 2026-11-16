@@ -51,7 +51,13 @@ def main() -> int:
             return 2
     else:
         identity = RNS.Identity()
-        identity.to_file(str(identity_path))
+        if not identity.to_file(str(identity_path)):
+            print(
+                f"Could not save Reticulum identity at {identity_path}; "
+                "refusing to start with an address that may not survive a restart.",
+                file=sys.stderr,
+            )
+            return 2
 
     reticulum = RNS.Reticulum(configdir=str(args.rns_config) if args.rns_config else None)
     router = LXMF.LXMRouter(storagepath=str(router_path))
