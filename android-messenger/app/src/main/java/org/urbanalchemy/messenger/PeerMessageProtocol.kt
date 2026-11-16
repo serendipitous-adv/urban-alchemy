@@ -37,15 +37,16 @@ class PeerMessageProtocol(
         checkActive()
         require(text.isNotBlank()) { "Message cannot be empty." }
         val now = nowMillis()
-        val key = session.copySessionKey()
-        val envelope = try {
-            val encrypted = SessionMessageCrypto.encrypt(
-                key, text, messageId, now, localFingerprint, peerFingerprint,
-                localSigningKeyPair.private
+        val localEncryptedPayload = LocalQueuedMessageCodec.seal(text)
+        outbox.enqueue(
+            OutboxRecord(
+                messageId = messageId,
+                recipientIdentity = peerFingerprint,
+                payloadBase64 = localEncryptedPayload,
+                createdAtEpochMillis = now,
+                expiresAtEpochMillis = safeAdd(now, MESSAGE_TTL_MILLIS)
             )
-            EncryptedMessageEnvelope.fromCryptoMessage(encrypted, safeAdd(now, MESSAGE_TTL_MILLIS))
-        } finally { key.fill(0) }
-        outbox.enqueue(envelope.toOutboxRecord())
+        )
         return messageId
     }
 
@@ -57,17 +58,29 @@ class PeerMessageProtocol(
     fun flushQueued(limit: Int = 20): Int {
         checkActive()
         val now = nowMillis()
-        val claims = outbox.claimDue(now, limit = limit)
+        val claims = outbox.claimDue(now, limit = limit, recipientIdentity = peerFingerprint)
         var sent = 0
         claims.forEach { claim ->
             try {
+                val plaintext = LocalQueuedMessageCodec.open(claim.record.payloadBase64)
+                val key = session.copySessionKey()
+                val envelope = try {
+                    val encrypted = SessionMessageCrypto.encrypt(
+                        key, plaintext, claim.record.messageId, claim.record.createdAtEpochMillis,
+                        localFingerprint, peerFingerprint, localSigningKeyPair.private
+                    )
+                    EncryptedMessageEnvelope.fromCryptoMessage(
+                        encrypted, claim.record.expiresAtEpochMillis
+                    )
+                } finally { key.fill(0) }
                 val frame = UaProtocolFrame(
                     UaProtocolFrame.Type.ENCRYPTED_MESSAGE,
-                    claim.record.payloadBase64.toByteArray(StandardCharsets.UTF_8)
+                    envelope.encodeBase64().toByteArray(StandardCharsets.UTF_8)
                 )
                 sendFrame(frame.encode())
                 outbox.completeClaim(claim, DeliveryState.ROUTER_ACCEPTED)
-                outbox.transition(claim.record.messageId, DeliveryState.SENT)
+                val updated = outbox.transition(claim.record.messageId, DeliveryState.SENT)
+                onDeliveryUpdated(updated)
                 sent++
             } catch (error: Exception) {
                 runCatching { outbox.completeClaim(claim, DeliveryState.FAILED, error.message ?: "Transport send failed.") }
