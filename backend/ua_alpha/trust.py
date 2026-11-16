@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import secrets
 import uuid
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
@@ -93,7 +94,7 @@ class PeerInvitation:
             invitation_id="", inviter_persona_id=inviter_persona_id,
             inviter_public_key=public, recipient_persona_id=recipient_persona_id,
             scopes=normalized, issued_at=issued.isoformat(), expires_at=expires.isoformat(),
-            nonce=_b64(__import__("secrets").token_bytes(24)), signature="",
+            nonce=_b64(secrets.token_bytes(24)), signature="",
         )
         identity = hashlib.sha256(_canonical(unsigned.unsigned())).hexdigest()
         signed = cls(**{**unsigned.__dict__, "invitation_id": identity})
@@ -134,7 +135,8 @@ class PeerInvitation:
                 raise InvitationError("invitation scopes must be unique and sorted")
             if not self.scopes or len(self.scopes) > 32 or any(not s or len(s) > 128 for s in self.scopes):
                 raise InvitationError("invitation scopes are invalid")
-            if hashlib.sha256(_canonical({k: v for k, v in self.unsigned().items() if k != "invitation_id"})).hexdigest() != self.invitation_id:
+            identity_payload = {**self.unsigned(), "invitation_id": ""}
+            if hashlib.sha256(_canonical(identity_payload)).hexdigest() != self.invitation_id:
                 raise InvitationError("invitation ID does not match its contents")
             issued, expires = _timestamp(self.issued_at), _timestamp(self.expires_at)
             current = (now or datetime.now(timezone.utc)).astimezone(timezone.utc)
