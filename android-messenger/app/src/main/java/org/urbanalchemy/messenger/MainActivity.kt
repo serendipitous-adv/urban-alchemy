@@ -1,7 +1,7 @@
 package org.urbanalchemy.messenger
 
 import android.os.Bundle
-import com.chaquo.python.AndroidPlatform
+import com.chaquo.python.android.AndroidPlatform
 import com.chaquo.python.Python
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
