@@ -102,6 +102,11 @@ def start_runtime(storage_path, display_name="Urban Alchemy"):
             "reticulum_started": True,
             "announce_sent": False,
         }
+        # Register the native LXMF receive callback before exposing the runtime.
+        # The bridge uses LXMF's own message format, routing and delivery proofs.
+        from lxmf_messaging import attach
+        attach(router, source)
+
         _runtime_state = {
             "reticulum": reticulum,
             "router": router,
@@ -124,3 +129,22 @@ def announce():
             "announce_submitted": True,
             "destination": source.hash.hex(),
         })
+
+
+
+def send_message(recipient_hex, text, client_message_id):
+    """Submit a message through the active LXMF router."""
+    from lxmf_messaging import send_message as lxmf_send
+    with _runtime_lock:
+        if _runtime_state is None:
+            raise RuntimeError("Start Reticulum before sending.")
+    return lxmf_send(recipient_hex, text, client_message_id)
+
+
+def drain_events(limit=100):
+    """Drain inbound messages and outbound delivery-state changes."""
+    from lxmf_messaging import drain_events as lxmf_drain
+    with _runtime_lock:
+        if _runtime_state is None:
+            raise RuntimeError("Start Reticulum before reading messages.")
+    return lxmf_drain(limit)
