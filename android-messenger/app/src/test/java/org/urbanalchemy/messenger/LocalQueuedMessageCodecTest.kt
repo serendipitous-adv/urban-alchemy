@@ -1,14 +1,26 @@
 package org.urbanalchemy.messenger
 
+import org.junit.After
+import org.junit.Before
 import org.junit.Assert.*
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
+import javax.crypto.KeyGenerator
 
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [28])
 class LocalQueuedMessageCodecTest {
+    @Before fun useJvmTestKey() {
+        val key = KeyGenerator.getInstance("AES").apply { init(256) }.generateKey()
+        LocalMessageCrypto.keyProvider = { key }
+    }
+
+    @After fun restoreAndroidKeystore() {
+        LocalMessageCrypto.keyProvider = { throw IllegalStateException("Android Keystore is unavailable in plain JVM tests.") }
+    }
+
     @Test fun queuedPayloadCanBeOpenedIndependentlyOfPeerSessionKeys() {
         val sealed = LocalQueuedMessageCodec.seal("Survive a reconnect.")
         assertNotEquals("Survive a reconnect.", sealed)
