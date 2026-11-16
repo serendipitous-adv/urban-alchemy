@@ -520,6 +520,8 @@ private fun ChatScreen(
     onSend: (String) -> Unit
 ) {
     var draft by remember(conversation.id) { mutableStateOf("") }
+    val hasValidRecipient = conversation.recipientAddress
+        ?.let { Regex("^[0-9a-f]{32}$").matches(it) } == true
     Column(
         modifier = Modifier.fillMaxSize().imePadding().padding(horizontal = 16.dp, vertical = 10.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp)
@@ -589,12 +591,19 @@ private fun ChatScreen(
                         draft = ""
                     }
                 },
-                enabled = draft.isNotBlank()
+                enabled = draft.isNotBlank() && hasValidRecipient
             ) { Text("Send") }
         }
+        if (!hasValidRecipient) {
+            Text(
+                "Add a contact with a valid LXMF address, then start a conversation from Contacts to send.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.error
+            )
+        }
         Text(
-            if (conversation.recipientAddress == null)
-                "Encrypted on this device · Local-only"
+            if (!hasValidRecipient)
+                "Sending unavailable · No valid recipient"
             else
                 "Queued locally · Destination saved, not yet sent",
             style = MaterialTheme.typography.bodySmall,
