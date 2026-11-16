@@ -6,8 +6,13 @@ stack. It does not send messages. Announcing is a separate explicit action.
 """
 
 import json
+import signal
 import threading
 from pathlib import Path
+
+# RNS registers process signal handlers during startup. Chaquopy starts this
+# runtime from a Kotlin worker thread, where Python signal.signal is not allowed.
+signal.signal = lambda *args, **kwargs: None
 
 _runtime_lock = threading.RLock()
 _runtime_state = None
