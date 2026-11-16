@@ -280,6 +280,24 @@ A community MAY request a narrowly scoped proof for a specific, published purpos
 
 Communities MAY define eligibility rules for scarce or explicitly one-per-person benefits, but SHOULD prefer privacy-preserving eligibility credentials, rate limits, or other less-linking mechanisms where they adequately address the abuse case. A proof request MUST NOT itself establish legal identity or broader authority.
 
+
+### 6.3.8 Persona portability and community-scoped authority — accepted design direction
+
+A participant controls their UA persona and MAY use it across Guilds, Patches, nodes, and other compatible UA communities. Persona portability MUST NOT imply automatic portability of community-granted authority.
+
+Requirements:
+
+1. The stable UA persona identifier and participant-controlled key-transition history SHOULD remain usable across compatible communities, subject to the participant's chosen disclosures and the protocol's privacy requirements.
+2. A participant MAY carry and selectively present portable records or credentials whose issuer, scope, validity, and provenance can be independently verified.
+3. Guild membership, Patch recognition, private conversations, internal reputation, governance rights, SCAF balances, and other community- or ledger-specific privileges MUST NOT transfer automatically merely because a persona is presented elsewhere.
+4. Each community or record authority decides which external credentials or records it recognizes, under its published policies.
+5. Private community data MUST NOT become portable by default. Its disclosure or export remains subject to the originating community's policy, applicable permissions, and participant rights.
+6. A receiving community MUST be able to distinguish participant-controlled persona records from issuer-controlled credentials and community-specific decisions.
+7. Leaving a community MUST NOT require surrendering the participant's persona or unrelated portable records. Conversely, retaining a persona MUST NOT force a community to continue recognizing revoked membership or privileges.
+8. Implementations SHOULD provide clear provenance and scope when displaying imported credentials or records, so that recognition by one community is not misrepresented as universal reputation or authority.
+
+The governing principle is **portable identity without portable authority**. Credential formats, export/import mechanics, revocation checks, and privacy-preserving presentation remain subject to Phase 1 research and interoperability testing.
+
 ### 6.4 Identity, persona, membership, and reputation
 
 These are separate concepts:
@@ -591,6 +609,7 @@ The prototype is accepted only when the following tests pass:
 21. A participant can selectively prove a narrowly scoped cross-persona common-control claim to an authorized verifier without publishing a global persona-linkage handle; proof-system claims are validated against an explicit threat model.
 22. A participant can disclose a scoped association between personas or between a persona and a specific community, while withholding that relationship from other audiences; revocation affects future reliance but does not erase information already received.
 23. Ordinary Guild participation does not require blanket proof of common control across personas; a narrowly scoped request for a published, proportionate purpose is handled under an explicit community policy and offers a reasonable alternative where practicable.
+24. A persona can be used across communities and carry selectively disclosed, verifiable portable records, while Guild/Patch membership, private data, reputation, SCAF, and other local authority remain subject to the originating and receiving communities' policies.
 
 ## 18. Phase 0 open questions
 
@@ -605,6 +624,7 @@ These remain deliberately unresolved until research or prototype evidence is ava
 - Privacy-preserving selective proof format for narrowly scoped cross-persona common-control claims.
 - Scoped persona-relationship assertion/credential format, verifier and audience binding, and revocation/expiry distribution.
 - Privacy-preserving eligibility mechanisms and alternatives to common-control proofs for one-per-participant benefits.
+- Portable credential and record formats, provenance, revocation checking, and participant-controlled export/import semantics across communities.
 - Event identifier construction and canonicalization.
 - Synchronization summary/anti-entropy algorithm.
 - Storage encryption and secure key storage per platform.
@@ -647,6 +667,7 @@ No production application implementation should begin until the Phase 0 exit cri
 | D-014 | Support participant-controlled, privacy-preserving selective proofs of narrowly scoped common control across personas; investigate zero-knowledge techniques without prematurely selecting a proof system | Accepted design direction |
 | D-015 | Persona relationships and association disclosures are granular, explicitly scoped, selectively disclosed, and independently revocable; revocation cannot erase information already received | Accepted design direction |
 | D-016 | No blanket common-control proof requirement for ordinary Guild participation; narrowly scoped, proportionate requests require a published purpose and reasonable alternative where practicable | Accepted design direction |
+| D-017 | Persona identity and selectively disclosed verifiable records are portable; community membership, private data, reputation, SCAF, and other authority do not transfer automatically | Accepted design direction |
 
 ## 21. Research references
 
