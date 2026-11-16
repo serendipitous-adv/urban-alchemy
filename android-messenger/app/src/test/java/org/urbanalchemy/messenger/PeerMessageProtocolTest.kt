@@ -97,8 +97,8 @@ class PeerMessageProtocolTest {
 
     @After fun tearDown() {
         aliceProtocol.close()
-        // Alice protocol closes shared test outbox; Bob session is closed explicitly.
-        bobSession.close()
+        // Both protocol schedulers must be shut down; the outbox close is idempotent.
+        bobProtocol.close()
         dbNames.forEach(context::deleteDatabase)
         context.deleteDatabase("ua_transport_outbox.db")
         LocalMessageCrypto.resetKeyProviderForTests()
