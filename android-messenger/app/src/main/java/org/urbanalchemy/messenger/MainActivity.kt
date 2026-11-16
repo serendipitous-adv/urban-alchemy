@@ -30,7 +30,9 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.*
+import kotlinx.coroutines.delay
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import java.text.DateFormat
@@ -186,7 +188,11 @@ class MainActivity : ComponentActivity() {
                                 store.createConversation(title)
                                 conversations = store.listConversations()
                             },
-                            onContacts = { showContacts = true }
+                            onContacts = { showContacts = true },
+                            onRefreshData = {
+                                conversations = store.listConversations()
+                                contacts = store.listContacts()
+                            }
                         )
                     }
                 }
@@ -210,57 +216,79 @@ private fun MessengerHome(
     onCopyAddress: () -> Unit,
     onOpen: (Long) -> Unit,
     onCreateConversation: (String) -> Unit,
-    onContacts: () -> Unit
+    onContacts: () -> Unit,
+    onRefreshData: () -> Unit
 ) {
     var newName by remember { mutableStateOf("") }
-    Column(
-        modifier = Modifier.fillMaxSize().padding(20.dp),
-        verticalArrangement = Arrangement.spacedBy(14.dp)
+    var isRefreshing by remember { mutableStateOf(false) }
+    val refreshScope = rememberCoroutineScope()
+
+    PullToRefreshBox(
+        isRefreshing = isRefreshing,
+        onRefresh = {
+            refreshScope.launch {
+                isRefreshing = true
+                onRefreshData()
+                delay(350)
+                isRefreshing = false
+            }
+        },
+        modifier = Modifier.fillMaxSize()
     ) {
-        Text("Urban Alchemy", style = MaterialTheme.typography.headlineMedium)
-        Text("Messenger · Offline-first", style = MaterialTheme.typography.titleMedium)
-        Card(modifier = Modifier.fillMaxWidth()) {
-            Column(modifier = Modifier.padding(16.dp)) {
-                Text("Your local identity", style = MaterialTheme.typography.titleSmall)
-                Text(fingerprint, style = MaterialTheme.typography.bodySmall)
-                Text("Private identity key stays on this device.", style = MaterialTheme.typography.bodySmall)
+        LazyColumn(
+            modifier = Modifier.fillMaxSize().padding(horizontal = 20.dp, vertical = 20.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp)
+        ) {
+            item {
+                Text("Urban Alchemy", style = MaterialTheme.typography.headlineMedium)
+                Text("Messenger · Offline-first", style = MaterialTheme.typography.titleMedium)
             }
-        }
-        Card(modifier = Modifier.fillMaxWidth()) {
-            Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("Transport runtime diagnostic", style = MaterialTheme.typography.titleSmall)
-                Text(runtimeStatus, style = MaterialTheme.typography.bodySmall)
-                Button(onClick = onCheckRuntime) { Text("Check embedded runtime") }
-                Text("Import test only. Does not connect, announce, or send messages.", style = MaterialTheme.typography.bodySmall)
-            }
-        }
-        Card(modifier = Modifier.fillMaxWidth()) {
-            Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("Reticulum / LXMF", style = MaterialTheme.typography.titleSmall)
-                Text(transportStatus, style = MaterialTheme.typography.bodySmall)
-                if (lxmfAddress != null) {
-                    Text("Your LXMF address", style = MaterialTheme.typography.labelMedium)
-                    Text(lxmfAddress, style = MaterialTheme.typography.bodySmall)
-                    TextButton(onClick = onCopyAddress) { Text("Copy address") }
+            item {
+                Card(modifier = Modifier.fillMaxWidth()) {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Text("Your local identity", style = MaterialTheme.typography.titleSmall)
+                        Text(fingerprint, style = MaterialTheme.typography.bodySmall)
+                        Text("Private identity key stays on this device.", style = MaterialTheme.typography.bodySmall)
+                    }
                 }
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Button(onClick = onStartTransport, enabled = !transportStarted) { Text("Start transport") }
-                    Button(onClick = onAnnounce, enabled = transportStarted) { Text("Announce") }
-                }
-                Text("Starts local Reticulum discovery and creates a persistent LXMF identity. Announce makes the address discoverable; neither action sends a message.", style = MaterialTheme.typography.bodySmall)
             }
-        }
-        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-            Text("Conversations", style = MaterialTheme.typography.titleLarge)
-            TextButton(onClick = onContacts) { Text("Contacts ($contactCount)") }
-        }
-        if (conversations.isEmpty()) {
-            Text("No conversations yet. Create one below or start from a contact.")
-        } else {
-            LazyColumn(
-                modifier = Modifier.weight(1f),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
+            item {
+                Card(modifier = Modifier.fillMaxWidth()) {
+                    Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text("Transport runtime diagnostic", style = MaterialTheme.typography.titleSmall)
+                        Text(runtimeStatus, style = MaterialTheme.typography.bodySmall)
+                        Button(onClick = onCheckRuntime) { Text("Check embedded runtime") }
+                        Text("Import test only. Does not connect, announce, or send messages.", style = MaterialTheme.typography.bodySmall)
+                    }
+                }
+            }
+            item {
+                Card(modifier = Modifier.fillMaxWidth()) {
+                    Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text("Reticulum / LXMF", style = MaterialTheme.typography.titleSmall)
+                        Text(transportStatus, style = MaterialTheme.typography.bodySmall)
+                        if (lxmfAddress != null) {
+                            Text("Your LXMF address", style = MaterialTheme.typography.labelMedium)
+                            Text(lxmfAddress, style = MaterialTheme.typography.bodySmall)
+                            TextButton(onClick = onCopyAddress) { Text("Copy address") }
+                        }
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Button(onClick = onStartTransport, enabled = !transportStarted) { Text("Start transport") }
+                            Button(onClick = onAnnounce, enabled = transportStarted) { Text("Announce") }
+                        }
+                        Text("Starts local Reticulum discovery and creates a persistent LXMF identity. Announce makes the address discoverable; neither action sends a message.", style = MaterialTheme.typography.bodySmall)
+                    }
+                }
+            }
+            item {
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                    Text("Conversations", style = MaterialTheme.typography.titleLarge)
+                    TextButton(onClick = onContacts) { Text("Contacts ($contactCount)") }
+                }
+            }
+            if (conversations.isEmpty()) {
+                item { Text("No conversations yet. Create one below or start from a contact.") }
+            } else {
                 items(conversations, key = { it.id }) { conversation ->
                     Card(modifier = Modifier.fillMaxWidth()) {
                         TextButton(
@@ -280,24 +308,28 @@ private fun MessengerHome(
                     }
                 }
             }
-        }
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            OutlinedTextField(
-                value = newName,
-                onValueChange = { newName = it },
-                label = { Text("New local conversation") },
-                modifier = Modifier.weight(1f),
-                singleLine = true
-            )
-            Button(onClick = {
-                val title = newName.trim()
-                if (title.isNotEmpty()) {
-                    onCreateConversation(title)
-                    newName = ""
+            item {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedTextField(
+                        value = newName,
+                        onValueChange = { newName = it },
+                        label = { Text("New local conversation") },
+                        modifier = Modifier.weight(1f),
+                        singleLine = true
+                    )
+                    Button(onClick = {
+                        val title = newName.trim()
+                        if (title.isNotEmpty()) {
+                            onCreateConversation(title)
+                            newName = ""
+                        }
+                    }) { Text("Create") }
                 }
-            }) { Text("Create") }
+            }
+            item {
+                Text("Local storage only · No internet or server required", style = MaterialTheme.typography.bodySmall)
+            }
         }
-        Text("Local storage only · No internet or server required", style = MaterialTheme.typography.bodySmall)
     }
 }
 
