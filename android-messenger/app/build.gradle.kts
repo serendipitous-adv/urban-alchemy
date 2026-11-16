@@ -6,14 +6,16 @@ plugins {
 
 android {
     namespace = "org.urbanalchemy.messenger"
+
     compileSdk = 35
 
     defaultConfig {
-        applicationId = "org.urbanalchemy.messenger"
+        // Separate package lets this preview install beside the original app.
+        applicationId = "org.urbanalchemy.messenger.preview"
         minSdk = 26
         targetSdk = 35
-        versionCode = 1
-        versionName = "0.1.0"
+        versionCode = 2
+        versionName = "0.2.0-preview"
     }
 
     compileOptions {
