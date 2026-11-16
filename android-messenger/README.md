@@ -8,10 +8,12 @@ Native Kotlin and Jetpack Compose prototype for the standalone, offline-first me
 - Local conversations and message history.
 - Message bodies encrypted at rest using AES-256-GCM with a key held in Android Keystore.
 - Durable local outgoing messages shown honestly as `QUEUED`.
+- Embedded Reticulum/LXMF runtime startup with a separate persistent delivery identity.
+- Local AutoInterface discovery configuration and explicit LXMF address announcement.
 - Local contact book with names and 32-character hexadecimal LXMF destination hashes.
 - Conversations can be created as local-only threads or started from a saved contact.
 - Contact destinations are marked **unverified**; saving an address does not authenticate its owner.
-- No account, internet connection, Reticulum node, or backend service is required for local features.
+- No account or backend service is required for local features. Live Reticulum discovery requires a compatible peer on a reachable network.
 
 ## Important limitations
 
@@ -19,7 +21,8 @@ This is an early local prototype, not yet a secure person-to-person messaging re
 
 - Contact addresses are stored locally; there is not yet a QR exchange, challenge-response identity verification, or cryptographic binding to the contact.
 - The local message-encryption key is installation-specific. This is not end-to-end encryption between two users.
-- There is no network transport, delivery acknowledgement, or reply path yet.
+- The LXMF runtime can start and announce an address, but queued messages are not yet connected to the transport.
+- Incoming LXMF messages, delivery callbacks, and end-to-end conversation integration are not implemented yet.
 - `QUEUED` means saved on this device only. It does not mean sent or delivered.
 - A second Android device is needed to validate real device-to-device transport, but is not needed to test local contact and storage behavior.
 
