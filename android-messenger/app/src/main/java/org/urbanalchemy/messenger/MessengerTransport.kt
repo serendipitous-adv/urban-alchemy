@@ -14,7 +14,7 @@ interface ReticulumLxmfTransport {
         fun onReady(localDestination: String)
         fun onStatus(update: LxmfTransportUpdate)
         fun onIncoming(message: LxmfIncomingMessage)
-        fun onError(error: LxmfLxmfTransportError)
+        fun onError(error: LxmfTransportError)
     }
 
     /** Start the transport and load/create its independent persistent network identity. */
