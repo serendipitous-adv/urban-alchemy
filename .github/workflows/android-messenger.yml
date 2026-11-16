@@ -94,7 +94,7 @@ jobs:
         if: steps.signing.outputs.enabled == 'true'
         env:
           KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
-          ANDROID_KEYSTORE_PATH: ${{ runner.temp }}/urban-alchemy-release.jks
+          ANDROID_KEYSTORE_PATH: ${{ runner.temp }}/urban-alchemy-release.p12
         run: echo "$KEYSTORE_BASE64" | base64 --decode > "$ANDROID_KEYSTORE_PATH"
       - name: Assemble signed stable APK
         if: steps.signing.outputs.enabled == 'true'
