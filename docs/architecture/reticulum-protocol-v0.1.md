@@ -851,9 +851,17 @@ The initial research baseline is the official Reticulum 1.6.0 documentation and 
 
 Dependency upgrades require regression tests for identity persistence, destination addressing, announcements, Links, Requests, Resources, LXMF delivery, and constrained-link behavior.
 
-## 17. Phase 1 two-node prototype acceptance tests
+## 17. Prototype phases and acceptance tests
 
-The prototype is accepted only when the following tests pass:
+The protocol describes the long-term architectural contract. The first prototype is intentionally narrower: it proves the decentralized substrate first, then demonstrates a useful UA quest workflow on top of it.
+
+Future capabilities remain valid architectural goals, but their end-to-end implementation is not a prerequisite for the initial prototype.
+
+### 17.1 Phase 1A — Decentralized substrate
+
+Phase 1A proves that independently operated UA nodes can discover one another, exchange authorized records, preserve verifiable state, and operate without a central service or continuous internet access.
+
+The phase is accepted only when:
 
 1. Two independently operated UA nodes start without a central service.
 2. Each node has its own persistent RNS identity and local store.
@@ -861,49 +869,62 @@ The prototype is accepted only when the following tests pass:
 4. Trusted-network discovery exposes a service descriptor only to authorized peers.
 5. Invitation-only discovery works through an explicit invitation without publishing private service metadata.
 6. A public service listing does not grant access to private service operations.
-7. Node A publishes a versioned quest record.
-8. Node B discovers and retrieves the quest.
-9. Node B creates a signed completion-attestation event.
-10. Node A verifies the event's signature and applicable quest/issuer rules.
-11. Duplicate delivery does not duplicate a state transition or reward.
-12. Both nodes disconnect, continue local operation, and later synchronize missing authorized records.
-13. Interrupted synchronization resumes without corrupting or duplicating records.
-14. A third node can join through the supported discovery/invitation process without central registration.
-15. The workflow succeeds on an isolated local network with no internet connection.
-16. Invalid signatures, malformed payloads, unauthorized requests, replayed events, and oversized messages are rejected safely.
-17. The prototype documents which operations are unavailable while disconnected and how unresolved conflicts are represented.
-18. A valid persona recovery-key signature initiates a recorded pending/disputed recovery claim; it does not automatically erase the prior persona or force community recognition. A compromised recovery key can be revoked and replaced by a separately signed master-authorized event when the master key is available.
-19. Recovery challenge windows and temporary restrictions are applied according to the relevant community/record authority's published policy, without a universal network-wide delay.
-20. Compromise recovery preserves the stable UA persona identifier while binding it to fresh RNS key material/identity where necessary; historical signatures remain verifiable under their original keys.
-21. A participant can selectively prove a narrowly scoped cross-persona common-control claim to an authorized verifier without publishing a global persona-linkage handle; proof-system claims are validated against an explicit threat model.
-22. A participant can disclose a scoped association between personas or between a persona and a specific community, while withholding that relationship from other audiences; revocation affects future reliance but does not erase information already received.
-23. Ordinary Guild participation does not require blanket proof of common control across personas; a narrowly scoped request for a published, proportionate purpose is handled under an explicit community policy and offers a reasonable alternative where practicable.
-24. A persona can be used across communities and carry selectively disclosed, verifiable portable records, while Guild/Patch membership, private data, reputation, SCAF, and other local authority remain subject to the originating and receiving communities' policies.
-25. Portable activity/contribution evidence retains issuer and context, while receiving communities independently interpret it; the system does not create a universal reputation score or automatically transfer local reputation judgments.
-26. A participant can delete locally controlled personal data and withdraw optional/future disclosures; nodes distinguish local deletion, cessation of replication, access restriction, and retained signed history, without promising global erasure.
-27. Interoperability and security rules are enforced at the protocol boundary while Guilds and Patches define their own governance; shared templates are voluntary and no central UA operator can unilaterally override community decisions.
+7. Both nodes can disconnect, continue local operation, and later synchronize missing authorized records.
+8. Interrupted synchronization resumes without corrupting or duplicating records.
+9. A third node can join through the supported discovery/invitation process without central registration.
+10. The workflow succeeds on an isolated local network with no internet connection.
+11. Invalid signatures, malformed payloads, unauthorized requests, replayed events, and oversized messages are rejected safely.
+12. The prototype documents which operations are unavailable while disconnected and how unresolved conflicts are represented.
 
-28. Two or more communities can establish, verify, scope, revise, and terminate a voluntary federation agreement; no agreement grants a federation or intermediary unilateral authority over a participating community, and no membership, reputation, SCAF, or governance rights transfer implicitly.
+### 17.2 Phase 1B — Quest and reward workflow
 
-29. A community can selectively publish or withhold its federation listing and geographic metadata independently; clients distinguish verified federation agreements from unverified claims, and map/index discovery never grants membership or access.
-30. A prototype can render and synchronize a small set of signed, visibility-controlled geographic records offline, without requiring a central map provider or exposing unpublished locations.
+Phase 1B demonstrates that the decentralized substrate supports a useful, independently operable UA application.
 
-31. A client can display opt-in interaction opportunities alongside geographic records while distinguishing static listings from live presence or availability; private location and contact details remain undisclosed until explicitly authorized.
-32. Two independently operated nodes can publish, discover, negotiate, accept, and cancel a peer-to-peer ride offer/request without a central dispatch service, while protecting precise location until the parties agree to share it.
+The phase is accepted only when:
 
-33. An individual persona, Guild, or Patch can publish, update, and revoke a time-bounded activity zone with selective audience and location precision; authorized peers can discover and respond to it offline or over Reticulum; expired zones disappear from active discovery; publication and response do not imply physical presence or disclose precise location without explicit authorization.
+1. Node A publishes a versioned quest record.
+2. Node B discovers and retrieves the quest.
+3. Node B creates a signed completion-attestation event.
+4. Node A verifies the event's signature and applicable quest/issuer rules.
+5. Duplicate delivery does not duplicate a state transition or reward.
 
-34. Two participants can publish unilateral relationship assertions and separately confirm or decline them; clients distinguish unilateral claims, mutual confirmations, and community-issued records; public indexing occurs only when explicitly authorized; incidental messaging, proximity, or activity-zone participation does not create durable graph relationships.
+The MVP product rules remain authoritative for this workflow: anyone with an account may create a quest; completion is self-attested with optional evidence; a valid distinct participant completion earns 10 SCAF; and the quest creator earns 5 SCAF per distinct valid completing player. SCAF remains an internal, non-transferable MVP ledger. The prototype must demonstrate the applicable accounting and idempotency rules without requiring a public token or blockchain.
 
-35. A client or community service can optionally recommend or create a quest using only relationship/social-graph records it is authorized to access; recommendations do not create obligations, reveal restricted graph data, or establish relationships, and quest creation/participation requires explicit action.
+### 17.3 Later-phase validation — Extended capabilities
 
-36. Independent nodes or community-controlled services can generate and recommend a quest or potential collaboration from authorized context; generated content is distinguishable from authored content, sensitive introductions use mutual opt-in, no participant is enrolled or contacted without authorization, and a generated quest passes ordinary publication and participation validation.
+The following acceptance tests are retained as future validation targets. They are not Phase 1A or Phase 1B release gates. They should be assigned to later implementation phases when the relevant feature is selected for development.
 
-37. The prototype demonstrates both reactive generation from explicit participant/community signals and proactive discovery from authorized context; participants can control or decline proactive suggestions, recommendations retain provenance, multi-party introductions require mutual opt-in, and no generated proposal creates obligations or bypasses ordinary quest publication and participation rules.
+#### Identity, privacy, portability, and governance
 
-38. The prototype can discover and invoke at least two independently implemented intelligence components through documented open interfaces at different scopes; components receive only authorized task context, can be replaced or disabled without loss of participant/community data, expose provenance, and cannot grant authority or bypass consent and governance.
+1. A valid persona recovery-key signature initiates a recorded pending/disputed recovery claim; it does not automatically erase the prior persona or force community recognition. A compromised recovery key can be revoked and replaced by a separately signed master-authorized event when the master key is available.
+2. Recovery challenge windows and temporary restrictions are applied according to the relevant community/record authority's published policy, without a universal network-wide delay.
+3. Compromise recovery preserves the stable UA persona identifier while binding it to fresh RNS key material/identity where necessary; historical signatures remain verifiable under their original keys.
+4. A participant can selectively prove a narrowly scoped cross-persona common-control claim to an authorized verifier without publishing a global persona-linkage handle; proof-system claims are validated against an explicit threat model.
+5. A participant can disclose a scoped association between personas or between a persona and a specific community, while withholding that relationship from other audiences; revocation affects future reliance but does not erase information already received.
+6. Ordinary Guild participation does not require blanket proof of common control across personas; a narrowly scoped request for a published, proportionate purpose is handled under an explicit community policy and offers a reasonable alternative where practicable.
+7. A persona can be used across communities and carry selectively disclosed, verifiable portable records, while Guild/Patch membership, private data, reputation, SCAF, and other local authority remain subject to the originating and receiving communities' policies.
+8. Portable activity/contribution evidence retains issuer and context, while receiving communities independently interpret it; the system does not create a universal reputation score or automatically transfer local reputation judgments.
+9. A participant can delete locally controlled personal data and withdraw optional/future disclosures; nodes distinguish local deletion, cessation of replication, access restriction, and retained signed history, without promising global erasure.
+10. Interoperability and security rules are enforced at the protocol boundary while Guilds and Patches define their own governance; shared templates are voluntary and no central UA operator can unilaterally override community decisions.
+11. Two or more communities can establish, verify, scope, revise, and terminate a voluntary federation agreement; no agreement grants a federation or intermediary unilateral authority over a participating community, and no membership, reputation, SCAF, or governance rights transfer implicitly.
+12. A community can selectively publish or withhold its federation listing and geographic metadata independently; clients distinguish verified federation agreements from unverified claims, and map/index discovery never grants membership or access.
 
-39. Two independently implemented agents can complete a bounded multi-agent workflow using explicit, scoped delegation; attempts to exceed delegated authority or perform sensitive actions without required authorization are rejected, delegation can be revoked for future actions, and the workflow preserves verifiable provenance and failure isolation.
+#### Maps, interaction objects, social graph, and rideshare
+
+13. A prototype can render and synchronize a small set of signed, visibility-controlled geographic records offline, without requiring a central map provider or exposing unpublished locations.
+14. A client can display opt-in interaction opportunities alongside geographic records while distinguishing static listings from live presence or availability; private location and contact details remain undisclosed until explicitly authorized.
+15. Two independently operated nodes can publish, discover, negotiate, accept, and cancel a peer-to-peer ride offer/request without a central dispatch service, while protecting precise location until the parties agree to share it.
+16. An individual persona, Guild, or Patch can publish, update, and revoke a time-bounded activity zone with selective audience and location precision; authorized peers can discover and respond to it offline or over Reticulum; expired zones disappear from active discovery; publication and response do not imply physical presence or disclose precise location without explicit authorization.
+17. Two participants can publish unilateral relationship assertions and separately confirm or decline them; clients distinguish unilateral claims, mutual confirmations, and community-issued records; public indexing occurs only when explicitly authorized; incidental messaging, proximity, or activity-zone participation does not create durable graph relationships.
+
+#### Dynamic quests and modular intelligence
+
+18. A client or community service can optionally recommend or create a quest using only relationship/social-graph records it is authorized to access; recommendations do not create obligations, reveal restricted graph data, or establish relationships, and quest creation/participation requires explicit action.
+19. Independent nodes or community-controlled services can generate and recommend a quest or potential collaboration from authorized context; generated content is distinguishable from authored content, sensitive introductions use mutual opt-in, no participant is enrolled or contacted without authorization, and a generated quest passes ordinary publication and participation validation.
+20. The prototype demonstrates both reactive generation from explicit participant/community signals and proactive discovery from authorized context; participants can control or decline proactive suggestions, recommendations retain provenance, multi-party introductions require mutual opt-in, and no generated proposal creates obligations or bypasses ordinary quest publication and participation rules.
+21. The prototype can discover and invoke at least two independently implemented intelligence components through documented open interfaces at different scopes; components receive only authorized task context, can be replaced or disabled without loss of participant/community data, expose provenance, and cannot grant authority or bypass consent and governance.
+22. Two independently implemented agents can complete a bounded multi-agent workflow using explicit, scoped delegation; attempts to exceed delegated authority or perform sensitive actions without required authorization are rejected, delegation can be revoked for future actions, and the workflow preserves verifiable provenance and failure isolation.
+
 
 ## 18. Phase 0 open questions
 
