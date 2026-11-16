@@ -47,14 +47,22 @@ object SessionKeyAgreement {
         val sharedSecret = agreement.generateSecret()
         val context = canonicalTranscript(transcript)
         val salt = MessageDigest.getInstance("SHA-256").digest(context)
-        val extract = Mac.getInstance(MAC_ALGORITHM)
-        extract.init(SecretKeySpec(salt, MAC_ALGORITHM))
-        val pseudorandomKey = extract.doFinal(sharedSecret)
-        val expand = Mac.getInstance(MAC_ALGORITHM)
-        expand.init(SecretKeySpec(pseudorandomKey, MAC_ALGORITHM))
-        expand.update(DOMAIN.toByteArray(StandardCharsets.UTF_8))
-        expand.update(1.toByte())
-        return expand.doFinal().copyOf(32)
+        var pseudorandomKey: ByteArray? = null
+        try {
+            val extract = Mac.getInstance(MAC_ALGORITHM)
+            extract.init(SecretKeySpec(salt, MAC_ALGORITHM))
+            pseudorandomKey = extract.doFinal(sharedSecret)
+            val expand = Mac.getInstance(MAC_ALGORITHM)
+            expand.init(SecretKeySpec(pseudorandomKey, MAC_ALGORITHM))
+            expand.update(DOMAIN.toByteArray(StandardCharsets.UTF_8))
+            expand.update(1.toByte())
+            return expand.doFinal().copyOf(32)
+        } finally {
+            sharedSecret.fill(0)
+            context.fill(0)
+            salt.fill(0)
+            pseudorandomKey?.fill(0)
+        }
     }
 
     private fun canonicalTranscript(transcript: Transcript): ByteArray = ByteArrayOutputStream().use { buffer ->
