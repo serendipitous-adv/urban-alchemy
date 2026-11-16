@@ -110,7 +110,7 @@ class MainActivity : ComponentActivity() {
             processed++
         }
 
-        val events = JSONArray(module.callAttr("drain_events", 100).toString())
+        val events = JSONArray(module.callAttr("peek_events", 100).toString())
         for (index in 0 until events.length()) {
             val event = events.getJSONObject(index)
             when (event.optString("type")) {
@@ -144,6 +144,9 @@ class MainActivity : ComponentActivity() {
                     }
                 }
             }
+        }
+        if (events.length() > 0) {
+            module.callAttr("ack_events", events.length())
         }
         processed
     }
@@ -842,7 +845,20 @@ private fun ChatScreen(
                         ) {
                             Text(message.text, style = MaterialTheme.typography.bodyLarge)
                             Text(
-                                "${DateFormat.getTimeInstance(DateFormat.SHORT).format(Date(message.createdAt))} · ${if (message.status == "LOCAL_ONLY") "saved locally · not sent" else message.status.lowercase()}",
+                                "${DateFormat.getTimeInstance(DateFormat.SHORT).format(Date(message.createdAt))} · ${when (message.status) {
+                                    "LOCAL_ONLY" -> "saved locally · not sent"
+                                    "QUEUED" -> "queued securely"
+                                    "WAITING_FOR_ROUTE" -> "waiting for route"
+                                    "WAITING_FOR_IDENTITY" -> "discovering recipient"
+                                    "SUBMITTED" -> "submitted to LXMF"
+                                    "SENT" -> "sent · awaiting delivery proof"
+                                    "DELIVERED" -> "delivered"
+                                    "FAILED" -> "failed · retained locally"
+                                    "REJECTED" -> "rejected"
+                                    "RECEIVED" -> "received"
+                                    "REQUEST" -> "message request"
+                                    else -> message.status.lowercase()
+                                }}",
                                 style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
