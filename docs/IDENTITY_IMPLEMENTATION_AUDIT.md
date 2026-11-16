@@ -49,10 +49,10 @@ Audit scope: current identity branch `feat/ua-player-node-identity-architecture`
 
 ## UX / MVP qualification notes
 
-- The home screen is one scrollable list containing identity, transport, diagnostics, conversations, and conversation creation.
+- The home screen is inbox-first: conversations and Contacts appear before expandable connection/diagnostics and identity details. The entire home screen remains one scrollable list.
 - Pulling down from the top reloads local conversations and contacts from SQLite; no network refresh is implied.
 - Contacts use one scrollable list and clearly state that saved LXMF destinations are unverified.
-- Chat input uses keyboard-aware layout; queued local messages are not represented as sent over LXMF.
+- Chat input uses keyboard-aware layout. Private local threads save encrypted `LOCAL_ONLY` notes; recipient-linked messages are stored as `QUEUED` only after recipient validation. Neither state represents LXMF transmission.
 - Source-level checks have been performed, but compilation, installation, migration, restart, and physical gesture tests remain outstanding.
 
 ## Explicit limitations
