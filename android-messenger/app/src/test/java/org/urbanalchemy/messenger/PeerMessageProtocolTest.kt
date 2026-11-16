@@ -100,7 +100,7 @@ class PeerMessageProtocolTest {
         bobSession.close()
         dbNames.forEach(context::deleteDatabase)
         context.deleteDatabase("ua_transport_outbox.db")
-        LocalMessageCrypto.keyProvider = { throw IllegalStateException("Android Keystore is unavailable in plain JVM tests.") }
+        LocalMessageCrypto.resetKeyProviderForTests()
     }
 
     @Test fun encryptedMessagesAndSignedReceiptsFlowBothDirections() {
