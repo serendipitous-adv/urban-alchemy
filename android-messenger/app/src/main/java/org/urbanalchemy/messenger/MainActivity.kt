@@ -439,6 +439,9 @@ private fun MessengerHome(
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
+            // Keep a small scroll runway on short inboxes so swipe gestures
+            // remain discoverable even when the visible cards fit the screen.
+            item { Spacer(modifier = Modifier.padding(bottom = 112.dp)) }
         }
     }
 }
