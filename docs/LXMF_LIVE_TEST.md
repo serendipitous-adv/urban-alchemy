@@ -57,6 +57,56 @@ Hello from Urban Alchemy!
 
 The recipient can reply to the address printed by your instance.
 
+## Android: run the UA prototype in Termux
+
+The prototype can be run directly on Android through Termux; a separate Linux
+installation or rooted device is not required. Reticulum's official manual
+documents this Termux approach.
+
+1. Install Termux from its official F-Droid listing:
+   https://f-droid.org/en/packages/com.termux/
+2. Open Termux and install the Android-native prerequisites:
+
+```sh
+pkg update && pkg upgrade
+pkg install git python python-cryptography
+python -m pip install --upgrade pip wheel
+```
+
+3. Clone the prototype branch and install its messaging dependencies:
+
+```sh
+git clone -b feat/lxmf-live-messenger https://github.com/serendipitous-adv/urban-alchemy.git
+cd urban-alchemy/backend
+python -m pip install rns lxmf
+```
+
+4. Start the UA messenger:
+
+```sh
+python scripts/ua_messenger.py --name "UA Android Test"
+```
+
+The first launch creates a persistent Reticulum identity under
+`~/.urban-alchemy/messenger/` and prints the public LXMF address. Keep the
+identity file private; share only the address.
+
+If the `python-cryptography` Termux package is unavailable for your device,
+follow the Android fallback build instructions in the official Reticulum
+manual before installing `rns` and `lxmf`:
+https://reticulum.network/manual/gettingstartedfast.html
+
+Keep Termux in the foreground for the first test and prevent Android battery
+optimization from stopping it. Background reliability and Android lifecycle
+integration are not yet implemented.
+
+**Important:** Running the UA CLI proves the prototype starts and can create
+an identity; it does not by itself prove a message reached another device.
+A real exchange needs an independent LXMF endpoint and a shared Reticulum
+route. Sideband on the same phone may contend for local Reticulum interfaces;
+the easiest independent test is another phone or computer running Sideband
+on the same Wi-Fi. We will verify the actual setup rather than assume it works.
+
 ## Android live test with Sideband
 
 1. Install **Sideband** on Android from its official distribution channel.
