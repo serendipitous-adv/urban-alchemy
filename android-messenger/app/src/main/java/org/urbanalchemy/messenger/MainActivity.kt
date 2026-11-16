@@ -98,22 +98,44 @@ class MainActivity : ComponentActivity() {
                         showContacts -> ContactsScreen(
                             contacts = contacts,
                             onShareInvite = {
-                                lifecycleScope.launch {
-                                    try {
-                                        val invite = withContext(Dispatchers.IO) {
-                                            if (!Python.isStarted()) Python.start(AndroidPlatform(applicationContext))
-                                            Python.getInstance().getModule("transport_probe")
-                                                .callAttr("create_contact_invite", "Urban Alchemy", uaIdentity.playerId)
-                                                .toString()
+                                try {
+                                    acquireReticulumMulticastLock()
+                                    transportStatus = "Preparing your LXMF contact invite..."
+                                    lifecycleScope.launch {
+                                        try {
+                                            val invite = withContext(Dispatchers.IO) {
+                                                if (!Python.isStarted()) Python.start(AndroidPlatform(applicationContext))
+                                                val module = Python.getInstance().getModule("transport_probe")
+                                                val runtimeJson = module.callAttr(
+                                                    "start_runtime",
+                                                    filesDir.resolve("reticulum").absolutePath,
+                                                    "Urban Alchemy"
+                                                ).toString()
+                                                val runtimeInfo = JSONObject(runtimeJson)
+                                                store.bindReticulumIdentity(
+                                                    runtimeInfo.getString("reticulum_identity_hash"),
+                                                    runtimeInfo.getString("reticulum_public_key"),
+                                                    runtimeInfo.getString("destination")
+                                                )
+                                                module.callAttr(
+                                                    "create_contact_invite",
+                                                    "Urban Alchemy",
+                                                    uaIdentity.playerId
+                                                ).toString()
+                                            }
+                                            transportStarted = true
+                                            val sendIntent = Intent(Intent.ACTION_SEND).apply {
+                                                type = "text/plain"
+                                                putExtra(Intent.EXTRA_TEXT, invite)
+                                            }
+                                            startActivity(Intent.createChooser(sendIntent, "Share your Urban Alchemy contact invite"))
+                                            transportStatus = "Your public LXMF contact invite is ready to share."
+                                        } catch (error: Exception) {
+                                            transportStatus = "Could not create invite: ${error.message ?: error.javaClass.simpleName}"
                                         }
-                                        val sendIntent = Intent(Intent.ACTION_SEND).apply {
-                                            type = "text/plain"
-                                            putExtra(Intent.EXTRA_TEXT, invite)
-                                        }
-                                        startActivity(Intent.createChooser(sendIntent, "Share your Urban Alchemy contact invite"))
-                                    } catch (error: Exception) {
-                                        transportStatus = "Could not create invite: ${error.message ?: error.javaClass.simpleName}"
                                     }
+                                } catch (error: Exception) {
+                                    transportStatus = "Could not prepare Reticulum: ${error.message ?: error.javaClass.simpleName}"
                                 }
                             },
                             onBack = { showContacts = false },
