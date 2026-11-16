@@ -98,9 +98,17 @@ class MainActivity : ComponentActivity() {
 
         var processed = 0
         for (pending in store.pendingOutbound()) {
-            val result = JSONObject(
-                module.callAttr("send_message", pending.recipient, pending.text, pending.id, pending.publicKey ?: "").toString()
-            )
+            // Persist the ambiguous boundary BEFORE calling LXMF. If the process
+            // dies during/after handle_outbound(), recovery must never resend it.
+            store.beginOutboundSubmission(pending.id)
+            val result = try {
+                JSONObject(
+                    module.callAttr("send_message", pending.recipient, pending.text, pending.id, pending.publicKey ?: "").toString()
+                )
+            } catch (error: Exception) {
+                store.updateOutbound(pending.id, "DELIVERY_UNKNOWN")
+                throw error
+            }
             if (result.optBoolean("accepted")) {
                 store.updateOutbound(
                     pending.id, "SUBMITTED",
@@ -876,6 +884,7 @@ private fun ChatScreen(
                                     "QUEUED" -> "queued securely"
                                     "WAITING_FOR_ROUTE" -> "waiting for route"
                                     "WAITING_FOR_IDENTITY" -> "discovering recipient"
+                                    "SUBMITTING" -> "submitting to LXMF · do not resend"
                                     "SUBMITTED" -> "submitted to LXMF"
                                     "DELIVERY_UNKNOWN" -> "delivery status unknown · not resent"
                                     "SENT" -> "sent · awaiting delivery proof"
