@@ -177,7 +177,17 @@ Persona recovery keys MUST be independently generated and MUST NOT be derived fr
 
 A recovery statement SHOULD identify the affected persona, replacement persona, recovery-key authority, recovery reason, issuance time, and any superseded recovery authorization. It MUST be disclosed selectively rather than globally announced by default.
 
-The exact certificate format, revocation distribution, recovery delay, and lost-master-key procedure remain open for Phase 1 research and threat modeling. Community recognition remains independent: recovery does not automatically transfer membership, reputation, SCAF, or governance rights.
+The exact certificate format, revocation distribution, and recovery delay remain open for Phase 1 research and threat modeling. Community recognition remains independent: recovery does not automatically transfer membership, reputation, SCAF, or governance rights.
+
+### 6.3.2 Master recovery-key loss — accepted MVP policy
+
+For the MVP, the offline master recovery key is protected by multiple independently stored offline backups under the participant's control. Threshold/social recovery is out of scope.
+
+Loss of the master key MUST NOT invalidate existing persona-specific recovery keys or the recovery authorizations already certified by it. Existing persona recovery paths continue to function according to their own policies. Without the master key, the participant cannot use that master to certify new persona recovery keys or issue master-level revocations.
+
+Replacing a lost master key and re-establishing its authority is an unresolved, explicit recovery ceremony; it MUST NOT silently inherit authority merely because a new key claims the same participant identity. The protocol will not assume that an unverified replacement master can retroactively revoke existing persona recovery keys.
+
+Backup procedures, secure storage media, geographic separation, and compromise response SHOULD be documented in the implementation's operational security guidance.
 
 ### 6.4 Identity, persona, membership, and reputation
 
@@ -529,6 +539,7 @@ No production application implementation should begin until the Phase 0 exit cri
 | D-007 | 10 SCAF participant reward; 5 SCAF creator royalty per distinct valid completer | Existing product decision |
 | D-008 | Reticulum-native application networking; internet is optional transport | Accepted |
 | D-009 | Each persona has an independently generated recovery key certified by the offline master recovery key | Accepted design direction |
+| D-010 | MVP master-key protection uses independent offline backups; threshold/social recovery is deferred | Accepted |
 
 ## 21. Research references
 
