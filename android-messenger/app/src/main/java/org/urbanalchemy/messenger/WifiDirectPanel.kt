@@ -14,8 +14,11 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.MaterialTheme
@@ -26,9 +29,14 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import java.util.UUID
 import java.util.concurrent.Executors
 
-/** Wi-Fi Direct connection and explicitly pinned UA session handshake controls. */
+private data class PeerChatLine(val id: String, val text: String, val outgoing: Boolean, val status: String)
+
+/** Wi-Fi Direct, explicit peer pinning, authenticated session, and encrypted text chat.
+ * Delivery status is driven by the verified signed-receipt pipeline.
+ */
 @Composable
 fun WifiDirectPanel() {
     val activity = LocalContext.current as Activity
@@ -46,21 +54,65 @@ fun WifiDirectPanel() {
     var transportReady by remember { mutableStateOf(false) }
     var activeTransport by remember { mutableStateOf<SocketFrameTransport?>(null) }
     var handshake by remember { mutableStateOf<PeerSessionHandshakeController?>(null) }
+    var messageProtocol by remember { mutableStateOf<PeerMessageProtocol?>(null) }
     var pinnedPeer by remember { mutableStateOf(pinStore.listFingerprints().firstOrNull()?.let(pinStore::get)) }
     var peerBundleText by remember { mutableStateOf("") }
     var sessionReady by remember { mutableStateOf(false) }
+    var draft by remember { mutableStateOf("") }
+    var chatLines by remember { mutableStateOf(emptyList<PeerChatLine>()) }
 
     fun prepareHandshake(transport: SocketFrameTransport, peer: PeerIdentityBundle) {
+        messageProtocol?.close()
+        messageProtocol = null
         handshake?.close()
-        handshake = PeerSessionHandshakeController(
+        lateinit var controller: PeerSessionHandshakeController
+        controller = PeerSessionHandshakeController(
             localSigningKeyPair = localSigningPair,
             pinnedPeerSigningKey = peer.signingPublicKey,
             replayGuard = SessionReplayGuard(activity.applicationContext),
             sendFrame = { frame -> transport.send(frame) },
             onEstablished = {
+                val session = requireNotNull(controller.establishedSession())
+                val protocol = PeerMessageProtocol(
+                    context = activity.applicationContext,
+                    session = session,
+                    localSigningKeyPair = localSigningPair,
+                    pinnedPeerSigningPublicKey = peer.signingPublicKey,
+                    sendFrame = { frame -> transport.send(frame) },
+                    onMessageReceived = { message ->
+                        mainHandler.post {
+                            chatLines = chatLines + PeerChatLine(
+                                message.messageId, message.text, false, "received"
+                            )
+                            status = "Received an authenticated message."
+                        }
+                    },
+                    onDeliveryUpdated = { record ->
+                        mainHandler.post {
+                            chatLines = chatLines.map {
+                                if (it.id == record.messageId) it.copy(status = record.state.name.lowercase())
+                                else it
+                            }
+                        }
+                    }
+                )
                 mainHandler.post {
+                    messageProtocol = protocol
+                    handshakeExecutor.execute {
+                        runCatching {
+                            val history = protocol.loadHistory()
+                            mainHandler.post {
+                                chatLines = history.map { item ->
+                                    PeerChatLine(item.messageId, item.text, item.outgoing, item.status)
+                                }
+                            }
+                            protocol.flushQueued()
+                        }.onFailure { error ->
+                            mainHandler.post { status = "Could not restore conversation: ${error.message}" }
+                        }
+                    }
                     sessionReady = true
-                    status = "Peer identity authenticated. Encrypted UA session established."
+                    status = "Peer identity authenticated. Encrypted messaging is ready."
                 }
             },
             onError = { message ->
@@ -70,6 +122,7 @@ fun WifiDirectPanel() {
                 }
             }
         )
+        handshake = controller
         status = "Pinned peer loaded. Start the secure handshake when the other device is ready."
     }
 
@@ -90,6 +143,8 @@ fun WifiDirectPanel() {
                             transportReady = false
                             sessionReady = false
                             activeTransport = null
+                            messageProtocol?.close()
+                            messageProtocol = null
                             handshake?.close()
                             handshake = null
                             status = "Not connected."
@@ -102,7 +157,15 @@ fun WifiDirectPanel() {
                         if (controller != null && controller.state() != PeerSessionHandshakeController.State.ESTABLISHED) {
                             handshakeExecutor.execute { controller.receiveFrame(frame) }
                         } else {
-                            status = "Received a UA frame; message handling is not connected yet."
+                            val protocol = messageProtocol
+                            if (protocol != null) {
+                                handshakeExecutor.execute {
+                                    runCatching { protocol.receiveFrame(frame) }
+                                        .onFailure { error ->
+                                            mainHandler.post { status = "Message rejected: ${error.message}" }
+                                        }
+                                }
+                            } else status = "Received a frame before the secure session was ready."
                         }
                     }
                 }
@@ -125,7 +188,12 @@ fun WifiDirectPanel() {
 
     DisposableEffect(manager) {
         manager?.let { runCatching { it.start() }.onFailure { managerError = it.message ?: "Could not start Wi-Fi Direct." } }
-        onDispose { handshake?.close(); manager?.close(); handshakeExecutor.shutdownNow() }
+        onDispose {
+            messageProtocol?.close()
+            handshake?.close()
+            manager?.close()
+            handshakeExecutor.shutdownNow()
+        }
     }
 
     val permission = if (Build.VERSION.SDK_INT >= 33) Manifest.permission.NEARBY_WIFI_DEVICES
@@ -164,6 +232,7 @@ fun WifiDirectPanel() {
                         "You cannot pin your own identity."
                     }
                     pinStore.pin(peerBundleText)
+                    peer
                 }.onSuccess { peer ->
                     pinnedPeer = peer
                     peerBundleText = ""
@@ -217,7 +286,50 @@ fun WifiDirectPanel() {
                     Text("Start secure session")
                 }
             }
-            if (sessionReady) Text("Authenticated encrypted session ready.", color = MaterialTheme.colorScheme.primary)
+
+            if (sessionReady) {
+                Text("Authenticated encrypted session", color = MaterialTheme.colorScheme.primary)
+                LazyColumn(modifier = Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    items(chatLines, key = { it.id }) { line ->
+                        Card(modifier = Modifier.fillMaxWidth()) {
+                            Column(modifier = Modifier.padding(10.dp)) {
+                                Text(if (line.outgoing) "You: ${line.text}" else "Peer: ${line.text}")
+                                Text(line.status, style = MaterialTheme.typography.labelSmall)
+                            }
+                        }
+                    }
+                }
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedTextField(
+                        value = draft, onValueChange = { draft = it },
+                        modifier = Modifier.weight(1f), label = { Text("Encrypted message") }
+                    )
+                    Button(onClick = {
+                        val text = draft.trim()
+                        val protocol = messageProtocol
+                        if (text.isNotEmpty() && protocol != null) {
+                            draft = ""
+                            val id = UUID.randomUUID().toString()
+                            handshakeExecutor.execute {
+                                runCatching {
+                                    protocol.queueMessage(text, id)
+                                    mainHandler.post {
+                                        chatLines = chatLines + PeerChatLine(id, text, true, "queued")
+                                    }
+                                    val count = protocol.flushQueued()
+                                    mainHandler.post {
+                                        status = if (count > 0) "Message sent over the peer socket; waiting for signed receipt."
+                                        else "Message remains queued for retry."
+                                    }
+                                }.onFailure { error ->
+                                    mainHandler.post { status = "Message send failed: ${error.message}" }
+                                }
+                            }
+                        }
+                    }, enabled = draft.isNotBlank() && messageProtocol != null) { Text("Send") }
+                }
+            }
+
             Text(
                 "No internet or LXMF is required. Peer identity must be exchanged and verified out of band; an ordinary socket connection is not trusted by itself.",
                 style = MaterialTheme.typography.bodySmall

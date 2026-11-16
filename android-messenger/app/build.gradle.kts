@@ -14,7 +14,7 @@ android {
     compileSdk = 35
 
     defaultConfig {
-        // Stable base ID. Debug remains side-by-side as .preview; release is .stable.
+        // Stable base ID. Debug remains side-by-side as .preview; QA is isolated; release is .stable.
         applicationId = "org.urbanalchemy.messenger"
         minSdk = 26
         targetSdk = 35
@@ -41,6 +41,12 @@ android {
         getByName("debug") {
             applicationIdSuffix = ".preview"
             versionNameSuffix = "-preview"
+        }
+        create("qa") {
+            initWith(getByName("debug"))
+            applicationIdSuffix = ".qa"
+            versionNameSuffix = "-qa"
+            matchingFallbacks += listOf("debug")
         }
         getByName("release") {
             applicationIdSuffix = ".stable"

@@ -47,6 +47,15 @@ jobs:
           path: android-messenger/app/build/outputs/apk/debug/*.apk
           if-no-files-found: error
           retention-days: 7
+      - name: Assemble isolated QA APK
+        run: gradle --no-daemon :app:assembleQa
+      - name: Upload isolated QA APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: urban-alchemy-messenger-qa
+          path: android-messenger/app/build/outputs/apk/qa/*.apk
+          if-no-files-found: error
+          retention-days: 14
 
   signed-release:
     if: ${{ github.event_name != 'pull_request' }}

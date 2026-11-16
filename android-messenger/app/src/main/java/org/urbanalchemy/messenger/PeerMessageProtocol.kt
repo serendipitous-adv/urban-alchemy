@@ -3,11 +3,22 @@ package org.urbanalchemy.messenger
 import android.content.Context
 import java.nio.charset.StandardCharsets
 import java.util.UUID
+import java.util.concurrent.Executors
+import java.util.concurrent.ScheduledExecutorService
+import java.util.concurrent.ScheduledFuture
+import java.util.concurrent.TimeUnit
+
+data class PeerChatHistoryItem(
+    val messageId: String,
+    val text: String,
+    val outgoing: Boolean,
+    val status: String,
+    val createdAtEpochMillis: Long
+)
 
 /**
  * Binds the authenticated session to UA message frames, durable outbox/inbox,
- * and signed recipient acknowledgements. The transport remains a byte-frame
- * callback; this class owns the application message semantics.
+ * and signed recipient acknowledgements.
  */
 class PeerMessageProtocol(
     context: Context,
@@ -26,13 +37,36 @@ class PeerMessageProtocol(
     private val peerFingerprint = SignedSessionHandshake.fingerprint(pinnedPeerSigningPublicKey)
     private val receiver = AuthenticatedMessageReceiver(inbox)
     @Volatile private var closed = false
+    private val retryScheduler: ScheduledExecutorService = Executors.newSingleThreadScheduledExecutor { runnable ->
+        Thread(runnable, "ua-message-retry").apply { isDaemon = true }
+    }
+    private var scheduledWork: ScheduledFuture<*>? = null
 
     init {
         require(session.localFingerprint == localFingerprint) { "Session belongs to another local identity." }
         require(session.peerFingerprint == peerFingerprint) { "Session peer does not match the pinned identity." }
     }
 
-    /** Encrypt and durably queue a message. It is not sent until flushQueued is called. */
+    /** Restores this peer's durable incoming and outgoing conversation history. */
+    @Synchronized
+    fun loadHistory(): List<PeerChatHistoryItem> {
+        checkActive()
+        val incoming = inbox.listForPeer(peerFingerprint).map { message ->
+            PeerChatHistoryItem(message.messageId, message.text, false, "received", message.createdAtEpochMillis)
+        }
+        val outgoing = outbox.listForRecipient(peerFingerprint).map { record ->
+            PeerChatHistoryItem(
+                record.messageId,
+                LocalQueuedMessageCodec.open(record.payloadBase64),
+                true,
+                record.state.name.lowercase(),
+                record.createdAtEpochMillis
+            )
+        }
+        return (incoming + outgoing).distinctBy { it.messageId }.sortedBy { it.createdAtEpochMillis }
+    }
+
+    /** Encrypt locally and durably queue a message; no session-specific ciphertext is persisted. */
     @Synchronized
     fun queueMessage(text: String, messageId: String = UUID.randomUUID().toString()): String {
         checkActive()
@@ -51,15 +85,28 @@ class PeerMessageProtocol(
         return messageId
     }
 
-    /**
-     * Sends due queued messages. A crash after socket write but before the outbox
-     * update causes a safe retransmission; the recipient inbox deduplicates IDs.
-     */
+    /** Converts timed-out sends to bounded delayed retries before attempting due queue items. */
+    @Synchronized
+    fun recoverTimedOutDeliveries(
+        acknowledgementTimeoutMillis: Long = DEFAULT_ACK_TIMEOUT_MILLIS
+    ): List<OutboxRecord> {
+        checkActive()
+        val recovered = outbox.recoverUnacknowledged(
+            nowEpochMillis = nowMillis(),
+            acknowledgementTimeoutMillis = acknowledgementTimeoutMillis,
+            recipientIdentity = peerFingerprint
+        )
+        recovered.forEach(onDeliveryUpdated)
+        scheduleNextWork()
+        return recovered
+    }
+
+    /** Sends due queued messages; receiver deduplicates retransmissions by message ID. */
     @Synchronized
     fun flushQueued(limit: Int = 20): Int {
         checkActive()
-        val now = nowMillis()
-        val claims = outbox.claimDue(now, limit = limit, recipientIdentity = peerFingerprint)
+        recoverTimedOutDeliveries()
+        val claims = outbox.claimDue(nowMillis(), limit = limit, recipientIdentity = peerFingerprint)
         var sent = 0
         claims.forEach { claim ->
             try {
@@ -70,9 +117,7 @@ class PeerMessageProtocol(
                         key, plaintext, claim.record.messageId, claim.record.createdAtEpochMillis,
                         localFingerprint, peerFingerprint, localSigningKeyPair.private
                     )
-                    EncryptedMessageEnvelope.fromCryptoMessage(
-                        encrypted, claim.record.expiresAtEpochMillis
-                    )
+                    EncryptedMessageEnvelope.fromCryptoMessage(encrypted, claim.record.expiresAtEpochMillis)
                 } finally { key.fill(0) }
                 val frame = UaProtocolFrame(
                     UaProtocolFrame.Type.ENCRYPTED_MESSAGE,
@@ -80,18 +125,23 @@ class PeerMessageProtocol(
                 )
                 sendFrame(frame.encode())
                 outbox.completeClaim(claim, DeliveryState.ROUTER_ACCEPTED)
-                val updated = outbox.transition(claim.record.messageId, DeliveryState.SENT)
+                val updated = outbox.transition(claim.record.messageId, DeliveryState.SENT, nowEpochMillis = nowMillis())
                 onDeliveryUpdated(updated)
                 sent++
             } catch (error: Exception) {
-                runCatching { outbox.completeClaim(claim, DeliveryState.FAILED, error.message ?: "Transport send failed.") }
+                runCatching {
+                    outbox.completeClaim(claim, DeliveryState.FAILED, error.message ?: "Transport send failed.")
+                    outbox.scheduleRetry(claim.record.messageId, nowMillis())
+                    outbox.listForRecipient(peerFingerprint).firstOrNull { it.messageId == claim.record.messageId }
+                        ?.let(onDeliveryUpdated)
+                }
                 if (error is IllegalStateException) throw error
             }
         }
+        scheduleNextWork()
         return sent
     }
 
-    /** Process one complete UA protocol frame from the connected peer. */
     @Synchronized
     fun receiveFrame(encodedFrame: ByteArray) {
         checkActive()
@@ -115,7 +165,6 @@ class PeerMessageProtocol(
             if (result == AuthenticatedMessageReceiver.Result.STORED) {
                 inbox.get(envelope.messageId)?.let(onMessageReceived)
             }
-            // Re-ack duplicates too, so a lost receipt does not strand the sender.
             val acknowledgement = SignedDeliveryAcknowledgement.sign(
                 envelope.messageId, peerFingerprint, localFingerprint,
                 nowMillis(), localSigningKeyPair.private
@@ -135,6 +184,30 @@ class PeerMessageProtocol(
             acknowledgement, localFingerprint, pinnedPeerSigningPublicKey, nowMillis()
         )
         onDeliveryUpdated(updated)
+        scheduleNextWork()
+    }
+
+    /** Schedules receipt-timeout recovery and delayed retries while this authenticated peer is connected. */
+    @Synchronized
+    private fun scheduleNextWork() {
+        if (closed) return
+        val now = nowMillis()
+        val nextAt = outbox.listForRecipient(peerFingerprint)
+            .filter { it.expiresAtEpochMillis == null || it.expiresAtEpochMillis > now }
+            .mapNotNull { record ->
+                when (record.state) {
+                    DeliveryState.QUEUED -> record.nextAttemptAtEpochMillis
+                    DeliveryState.SENT -> record.sentAtEpochMillis?.let { safeAdd(it, DEFAULT_ACK_TIMEOUT_MILLIS) }
+                    else -> null
+                }
+            }.minOrNull()
+        scheduledWork?.cancel(false)
+        scheduledWork = nextAt?.let { dueAt ->
+            val delay = (dueAt - now).coerceAtLeast(0L)
+            retryScheduler.schedule({
+                runCatching { flushQueued() }
+            }, delay, TimeUnit.MILLISECONDS)
+        }
     }
 
     private fun checkActive() { check(!closed) { "Peer message protocol is closed." } }
@@ -143,6 +216,8 @@ class PeerMessageProtocol(
     override fun close() {
         if (closed) return
         closed = true
+        scheduledWork?.cancel(true)
+        retryScheduler.shutdownNow()
         session.close()
         outbox.close()
         (inbox as? AutoCloseable)?.close()
@@ -152,6 +227,7 @@ class PeerMessageProtocol(
         if (Long.MAX_VALUE - value < increment) Long.MAX_VALUE else value + increment
 
     companion object {
+        private const val DEFAULT_ACK_TIMEOUT_MILLIS = 30_000L
         private const val MESSAGE_TTL_MILLIS = 7L * 24L * 60L * 60L * 1000L
     }
 }

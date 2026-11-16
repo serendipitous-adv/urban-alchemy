@@ -12,7 +12,9 @@ data class OutboxRecord(
     val state: DeliveryState = DeliveryState.QUEUED,
     val lastError: String? = null,
     /** Earliest epoch time at which a queued retry may be claimed. */
-    val nextAttemptAtEpochMillis: Long = 0L
+    val nextAttemptAtEpochMillis: Long = 0L,
+    /** Time the latest transmission was handed to the connected transport. */
+    val sentAtEpochMillis: Long? = null
 ) {
     init {
         require(messageId.isNotBlank())
@@ -22,6 +24,7 @@ data class OutboxRecord(
         require(expiresAtEpochMillis == null || expiresAtEpochMillis > createdAtEpochMillis)
         require(attemptCount >= 0)
         require(nextAttemptAtEpochMillis >= 0)
+        require(sentAtEpochMillis == null || sentAtEpochMillis >= createdAtEpochMillis)
     }
 }
 
@@ -39,7 +42,7 @@ data class OutboxClaim(
 )
 
 object MessageDelivery {
-    fun transition(record: OutboxRecord, next: DeliveryState, error: String? = null): OutboxRecord {
+    fun transition(record: OutboxRecord, next: DeliveryState, error: String? = null, transitionedAtEpochMillis: Long? = null): OutboxRecord {
         if (record.state == next) return record
         val allowed = when (record.state) {
             DeliveryState.QUEUED -> next == DeliveryState.ROUTER_ACCEPTED || next == DeliveryState.FAILED
@@ -54,7 +57,12 @@ object MessageDelivery {
             attemptCount = if (record.state == DeliveryState.FAILED && next == DeliveryState.QUEUED)
                 record.attemptCount + 1 else record.attemptCount,
             lastError = if (next == DeliveryState.FAILED) error?.take(512) else null,
-            nextAttemptAtEpochMillis = if (next == DeliveryState.QUEUED) record.nextAttemptAtEpochMillis else 0L
+            nextAttemptAtEpochMillis = if (next == DeliveryState.QUEUED) record.nextAttemptAtEpochMillis else 0L,
+            sentAtEpochMillis = when (next) {
+                DeliveryState.SENT -> transitionedAtEpochMillis ?: record.sentAtEpochMillis
+                DeliveryState.QUEUED, DeliveryState.FAILED, DeliveryState.DELIVERED -> null
+                else -> record.sentAtEpochMillis
+            }
         )
     }
 
@@ -64,9 +72,14 @@ object MessageDelivery {
         require(acknowledgement.acknowledgedAtEpochMillis >= record.createdAtEpochMillis) {
             "Acknowledgement predates the message."
         }
-        require(record.state == DeliveryState.SENT || record.state == DeliveryState.DELIVERED) {
-            "A message must be sent before it can be acknowledged."
-        }
-        return transition(record, DeliveryState.DELIVERED)
+        // A valid signed receipt can arrive after a timeout moved the record back to
+        // QUEUED (or FAILED). The recipient's signature proves it received this ID.
+        if (record.state == DeliveryState.DELIVERED) return record
+        return record.copy(
+            state = DeliveryState.DELIVERED,
+            lastError = null,
+            nextAttemptAtEpochMillis = 0L,
+            sentAtEpochMillis = null
+        )
     }
 }
