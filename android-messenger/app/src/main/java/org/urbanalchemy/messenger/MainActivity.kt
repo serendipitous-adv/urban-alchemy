@@ -4,14 +4,19 @@ import android.os.Bundle
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
+import android.content.Intent
 import android.net.wifi.WifiManager
 import org.json.JSONObject
+import org.json.JSONArray
 import com.chaquo.python.android.AndroidPlatform
 import com.chaquo.python.Python
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import androidx.compose.foundation.layout.Arrangement
@@ -20,6 +25,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -30,6 +36,8 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
@@ -48,6 +56,101 @@ class MainActivity : ComponentActivity() {
         if (!lock.isHeld) lock.acquire()
     }
 
+
+
+    private var lxmfSyncJob: Job? = null
+
+    private fun startLxmfSync(store: LocalStore) {
+        if (lxmfSyncJob?.isActive == true) return
+        lxmfSyncJob = lifecycleScope.launch {
+            while (isActive) {
+                try {
+                    syncLxmf(store)
+                } catch (_: Exception) {
+                    // Keep the encrypted outbox intact and retry on the next cycle.
+                }
+                delay(5_000)
+            }
+        }
+    }
+
+    private suspend fun syncLxmf(store: LocalStore): Int = withContext(Dispatchers.IO) {
+        if (!Python.isStarted()) Python.start(AndroidPlatform(applicationContext))
+        val module = Python.getInstance().getModule("transport_probe")
+        val runtime = JSONObject(
+            module.callAttr(
+                "start_runtime",
+                filesDir.resolve("reticulum").absolutePath,
+                "Urban Alchemy"
+            ).toString()
+        )
+        store.bindReticulumIdentity(
+            runtime.getString("reticulum_identity_hash"),
+            runtime.getString("reticulum_public_key"),
+            runtime.getString("destination")
+        )
+
+        var processed = 0
+        for (pending in store.pendingOutbound()) {
+            val result = JSONObject(
+                module.callAttr("send_message", pending.recipient, pending.text, pending.id, pending.publicKey ?: "").toString()
+            )
+            if (result.optBoolean("accepted")) {
+                store.updateOutbound(
+                    pending.id, "SUBMITTED",
+                    result.optString("lxmf_hash").takeIf { it.isNotBlank() && it != "null" }
+                )
+            } else {
+                val waiting = result.optString("status")
+                store.updateOutbound(
+                    pending.id,
+                    if (waiting == "WAITING_FOR_IDENTITY") "WAITING_FOR_IDENTITY" else "WAITING_FOR_ROUTE"
+                )
+            }
+            processed++
+        }
+
+        val events = JSONArray(module.callAttr("peek_events", 100).toString())
+        for (index in 0 until events.length()) {
+            val event = events.getJSONObject(index)
+            when (event.optString("type")) {
+                "inbound" -> {
+                    val source = event.optString("source")
+                    val hash = event.optString("message_hash")
+                    if (source.isNotBlank() && source != "null" && hash.isNotBlank() && hash != "null") {
+                        store.saveInbound(
+                            source, hash, event.optString("content"),
+                            event.optLong("timestamp", System.currentTimeMillis())
+                        )
+                        processed++
+                    }
+                }
+                "outbound_status" -> {
+                    val state = when (event.optString("state_name")) {
+                        "DELIVERED" -> "DELIVERED"
+                        "SENT" -> "SENT"
+                        "FAILED", "CANCELLED" -> "FAILED"
+                        "REJECTED" -> "REJECTED"
+                        "OUTBOUND", "SENDING" -> "SUBMITTED"
+                        else -> null
+                    }
+                    val clientId = event.optString("client_message_id")
+                    if (state != null && clientId.isNotBlank() && clientId != "null") {
+                        store.updateOutbound(
+                            clientId, state,
+                            event.optString("lxmf_hash").takeIf { it.isNotBlank() && it != "null" }
+                        )
+                        processed++
+                    }
+                }
+            }
+        }
+        if (events.length() > 0) {
+            module.callAttr("ack_events", events.length())
+        }
+        processed
+    }
+
     override fun onDestroy() {
         try {
             reticulumMulticastLock?.let { if (it.isHeld) it.release() }
@@ -60,6 +163,7 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         val store = LocalStore(this)
         val identity = DeviceIdentity.getOrCreate()
+        val uaIdentity = store.getOrCreateUaIdentity()
         setContent {
             var conversations by remember { mutableStateOf(store.listConversations()) }
             var contacts by remember { mutableStateOf(store.listContacts()) }
@@ -70,6 +174,7 @@ class MainActivity : ComponentActivity() {
             var transportStatus by remember { mutableStateOf("Not started") }
             var lxmfAddress by remember { mutableStateOf<String?>(null) }
             var transportStarted by remember { mutableStateOf(false) }
+            var isRefreshing by remember { mutableStateOf(false) }
 
             MaterialTheme {
                 Surface(modifier = Modifier.fillMaxSize()) {
@@ -80,14 +185,100 @@ class MainActivity : ComponentActivity() {
                             messages = messages,
                             onBack = { selectedId = null },
                             onSend = { text ->
-                                store.addQueuedMessage(selected.id, text)
-                                messages = store.listMessages(selected.id)
-                                conversations = store.listConversations()
+                                if (selected.recipientAddress?.let { Regex("^[0-9a-f]{32}$").matches(it) } == true) {
+                                    store.addQueuedMessage(selected.id, text)
+                                    messages = store.listMessages(selected.id)
+                                    conversations = store.listConversations()
+                                    transportStatus = "Message saved to the encrypted outbox. Submitting through LXMF..."
+                                    lifecycleScope.launch {
+                                        try {
+                                            syncLxmf(store)
+                                            startLxmfSync(store)
+                                            messages = store.listMessages(selected.id)
+                                            conversations = store.listConversations()
+                                            transportStatus = "LXMF outbox checked. Delivery status reflects transport callbacks."
+                                        } catch (error: Exception) {
+                                            transportStatus = "Message remains safely queued: ${error.message ?: error.javaClass.simpleName}"
+                                        }
+                                    }
+                                } else {
+                                    store.addLocalMessage(selected.id, text)
+                                    messages = store.listMessages(selected.id)
+                                    conversations = store.listConversations()
+                                }
                             }
                         )
                         showContacts -> ContactsScreen(
                             contacts = contacts,
+                            onShareInvite = {
+                                try {
+                                    acquireReticulumMulticastLock()
+                                    transportStatus = "Preparing your LXMF contact invite..."
+                                    lifecycleScope.launch {
+                                        try {
+                                            val invite = withContext(Dispatchers.IO) {
+                                                if (!Python.isStarted()) Python.start(AndroidPlatform(applicationContext))
+                                                val module = Python.getInstance().getModule("transport_probe")
+                                                val runtimeJson = module.callAttr(
+                                                    "start_runtime",
+                                                    filesDir.resolve("reticulum").absolutePath,
+                                                    "Urban Alchemy"
+                                                ).toString()
+                                                val runtimeInfo = JSONObject(runtimeJson)
+                                                store.bindReticulumIdentity(
+                                                    runtimeInfo.getString("reticulum_identity_hash"),
+                                                    runtimeInfo.getString("reticulum_public_key"),
+                                                    runtimeInfo.getString("destination")
+                                                )
+                                                module.callAttr(
+                                                    "create_contact_invite",
+                                                    "Urban Alchemy",
+                                                    uaIdentity.playerId
+                                                ).toString()
+                                            }
+                                            transportStarted = true
+                                            startLxmfSync(store)
+                                            val sendIntent = Intent(Intent.ACTION_SEND).apply {
+                                                type = "text/plain"
+                                                putExtra(Intent.EXTRA_TEXT, invite)
+                                            }
+                                            startActivity(Intent.createChooser(sendIntent, "Share your Urban Alchemy contact invite"))
+                                            transportStatus = "Your public LXMF contact invite is ready to share."
+                                        } catch (error: Exception) {
+                                            transportStatus = "Could not create invite: ${error.message ?: error.javaClass.simpleName}"
+                                        }
+                                    }
+                                } catch (error: Exception) {
+                                    transportStatus = "Could not prepare Reticulum: ${error.message ?: error.javaClass.simpleName}"
+                                }
+                            },
                             onBack = { showContacts = false },
+                            onValidateInvite = { rawInvite, complete ->
+                                lifecycleScope.launch {
+                                    try {
+                                        val validated = withContext(Dispatchers.IO) {
+                                            if (!Python.isStarted()) Python.start(AndroidPlatform(applicationContext))
+                                            Python.getInstance().getModule("transport_probe")
+                                                .callAttr("validate_contact_invite", rawInvite)
+                                                .toString()
+                                        }
+                                        complete(validated, null)
+                                    } catch (error: Exception) {
+                                        complete(null, error.message ?: "This invite could not be verified.")
+                                    }
+                                }
+                            },
+                            onSaveVerifiedInvite = { inviteJson ->
+                                val invite = JSONObject(inviteJson)
+                                store.addVerifiedContact(
+                                    invite.getString("display_name"),
+                                    invite.getString("lxmf_destination"),
+                                    invite.getString("reticulum_identity_hash"),
+                                    invite.getString("reticulum_public_key"),
+                                    invite.optString("player_id").takeIf { it.isNotBlank() && it != "null" }
+                                )
+                                contacts = store.listContacts()
+                            },
                             onAddContact = { name, address ->
                                 store.addContact(name, address)
                                 contacts = store.listContacts()
@@ -102,6 +293,25 @@ class MainActivity : ComponentActivity() {
                         )
                         else -> MessengerHome(
                             fingerprint = identity.fingerprint,
+                            playerId = uaIdentity.playerId,
+                            nodeId = uaIdentity.nodeId,
+                            isRefreshing = isRefreshing,
+                            onRefresh = {
+                                isRefreshing = true
+                                lifecycleScope.launch {
+                                    try {
+                                        val snapshot = withContext(Dispatchers.IO) {
+                                            store.listConversations() to store.listContacts()
+                                        }
+                                        conversations = snapshot.first
+                                        contacts = snapshot.second
+                                    } catch (error: Exception) {
+                                        runtimeStatus = "Refresh failed: ${error.message ?: error.javaClass.simpleName}"
+                                    } finally {
+                                        isRefreshing = false
+                                    }
+                                }
+                            },
                             conversations = conversations,
                             contactCount = contacts.size,
                             runtimeStatus = runtimeStatus,
@@ -145,9 +355,19 @@ class MainActivity : ComponentActivity() {
                                                     ).toString()
                                             }
                                             val info = JSONObject(result)
-                                            lxmfAddress = info.getString("destination")
+                                            val destination = info.getString("destination")
+                                            store.bindReticulumIdentity(
+                                                info.getString("reticulum_identity_hash"),
+                                                info.getString("reticulum_public_key"),
+                                                destination
+                                            )
+                                            lxmfAddress = destination
                                             transportStarted = true
-                                            transportStatus = "Reticulum started. LXMF identity is saved on this device; no peer has been confirmed yet."
+                                            transportStatus = "Reticulum started. Checking the durable LXMF outbox..."
+                                            syncLxmf(store)
+                                            startLxmfSync(store)
+                                            conversations = store.listConversations()
+                                            transportStatus = "Reticulum is running. Outbox submitted where routes were available; waiting messages remain queued."
                                         } catch (error: Exception) {
                                             transportStatus = "FAILED: ${error.javaClass.simpleName}: ${error.message}"
                                         }
@@ -195,9 +415,14 @@ class MainActivity : ComponentActivity() {
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun MessengerHome(
     fingerprint: String,
+    playerId: String,
+    nodeId: String,
+    isRefreshing: Boolean,
+    onRefresh: () -> Unit,
     conversations: List<Conversation>,
     contactCount: Int,
     runtimeStatus: String,
@@ -213,155 +438,353 @@ private fun MessengerHome(
     onContacts: () -> Unit
 ) {
     var newName by remember { mutableStateOf("") }
-    Column(
-        modifier = Modifier.fillMaxSize().padding(20.dp),
-        verticalArrangement = Arrangement.spacedBy(14.dp)
+    var showIdentityDetails by remember { mutableStateOf(false) }
+    var showTransportDetails by remember { mutableStateOf(false) }
+
+    PullToRefreshBox(
+        isRefreshing = isRefreshing,
+        onRefresh = onRefresh,
+        modifier = Modifier.fillMaxSize()
     ) {
-        Text("Urban Alchemy", style = MaterialTheme.typography.headlineMedium)
-        Text("Messenger · Offline-first", style = MaterialTheme.typography.titleMedium)
-        Card(modifier = Modifier.fillMaxWidth()) {
-            Column(modifier = Modifier.padding(16.dp)) {
-                Text("Your local identity", style = MaterialTheme.typography.titleSmall)
-                Text(fingerprint, style = MaterialTheme.typography.bodySmall)
-                Text("Private identity key stays on this device.", style = MaterialTheme.typography.bodySmall)
-            }
-        }
-        Card(modifier = Modifier.fillMaxWidth()) {
-            Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("Transport runtime diagnostic", style = MaterialTheme.typography.titleSmall)
-                Text(runtimeStatus, style = MaterialTheme.typography.bodySmall)
-                Button(onClick = onCheckRuntime) { Text("Check embedded runtime") }
-                Text("Import test only. Does not connect, announce, or send messages.", style = MaterialTheme.typography.bodySmall)
-            }
-        }
-        Card(modifier = Modifier.fillMaxWidth()) {
-            Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("Reticulum / LXMF", style = MaterialTheme.typography.titleSmall)
-                Text(transportStatus, style = MaterialTheme.typography.bodySmall)
-                if (lxmfAddress != null) {
-                    Text("Your LXMF address", style = MaterialTheme.typography.labelMedium)
-                    Text(lxmfAddress, style = MaterialTheme.typography.bodySmall)
-                    TextButton(onClick = onCopyAddress) { Text("Copy address") }
+        LazyColumn(
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = androidx.compose.foundation.layout.PaddingValues(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            item {
+                Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                    Text("Urban Alchemy", style = MaterialTheme.typography.headlineMedium)
+                    Text("Messenger", style = MaterialTheme.typography.titleMedium)
+                    Text("LXMF · encrypted local outbox · route-aware delivery", style = MaterialTheme.typography.bodySmall)
                 }
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Button(onClick = onStartTransport, enabled = !transportStarted) { Text("Start transport") }
-                    Button(onClick = onAnnounce, enabled = transportStarted) { Text("Announce") }
-                }
-                Text("Starts local Reticulum discovery and creates a persistent LXMF identity. Announce makes the address discoverable; neither action sends a message.", style = MaterialTheme.typography.bodySmall)
             }
-        }
-        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-            Text("Conversations", style = MaterialTheme.typography.titleLarge)
-            TextButton(onClick = onContacts) { Text("Contacts ($contactCount)") }
-        }
-        if (conversations.isEmpty()) {
-            Text("No conversations yet. Create one below or start from a contact.")
-        } else {
-            LazyColumn(
-                modifier = Modifier.weight(1f),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
+            item {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = androidx.compose.ui.Alignment.CenterVertically
+                ) {
+                    Text("Conversations", style = MaterialTheme.typography.titleLarge)
+                    TextButton(onClick = onContacts) { Text("Contacts · $contactCount") }
+                }
+            }
+            if (conversations.isEmpty()) {
+                item {
+                    Card(modifier = Modifier.fillMaxWidth()) {
+                        Text(
+                            "No conversations yet. Start with a contact, or create a private local notes thread.",
+                            modifier = Modifier.padding(16.dp),
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                    }
+                }
+            } else {
                 items(conversations, key = { it.id }) { conversation ->
                     Card(modifier = Modifier.fillMaxWidth()) {
                         TextButton(
                             onClick = { onOpen(conversation.id) },
                             modifier = Modifier.fillMaxWidth()
                         ) {
-                            Column(modifier = Modifier.fillMaxWidth().padding(8.dp)) {
+                            Column(
+                                modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 5.dp),
+                                verticalArrangement = Arrangement.spacedBy(3.dp)
+                            ) {
                                 Text(conversation.title, style = MaterialTheme.typography.titleMedium)
-                                Text(conversation.preview, style = MaterialTheme.typography.bodySmall)
-                                if (conversation.recipientAddress != null) {
-                                    Text("To: ${conversation.recipientAddress}", style = MaterialTheme.typography.labelSmall)
-                                } else {
-                                    Text("Local-only conversation", style = MaterialTheme.typography.labelSmall)
-                                }
+                                Text(conversation.preview, style = MaterialTheme.typography.bodySmall, maxLines = 2)
+                                Text(
+                                    if (conversation.recipientAddress != null) "LXMF · address saved, unverified"
+                                    else "Private local thread · stays on this device",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
                             }
                         }
                     }
                 }
             }
-        }
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            OutlinedTextField(
-                value = newName,
-                onValueChange = { newName = it },
-                label = { Text("New local conversation") },
-                modifier = Modifier.weight(1f),
-                singleLine = true
-            )
-            Button(onClick = {
-                val title = newName.trim()
-                if (title.isNotEmpty()) {
-                    onCreateConversation(title)
-                    newName = ""
+            item {
+                Card(modifier = Modifier.fillMaxWidth()) {
+                    Column(
+                        modifier = Modifier.fillMaxWidth().padding(14.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        OutlinedTextField(
+                            value = newName,
+                            onValueChange = { newName = it },
+                            label = { Text("New local conversation") },
+                            placeholder = { Text("Give it a name") },
+                            modifier = Modifier.fillMaxWidth(),
+                            singleLine = true
+                        )
+                        Button(
+                            onClick = {
+                                val title = newName.trim()
+                                if (title.isNotEmpty()) {
+                                    onCreateConversation(title)
+                                    newName = ""
+                                }
+                            },
+                            enabled = newName.isNotBlank(),
+                            modifier = Modifier.fillMaxWidth()
+                        ) { Text("Create private thread") }
+                    }
                 }
-            }) { Text("Create") }
+            }
+            item {
+                Card(modifier = Modifier.fillMaxWidth()) {
+                    Column(
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 8.dp)
+                    ) {
+                        TextButton(
+                            onClick = { showTransportDetails = !showTransportDetails },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Column(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalArrangement = Arrangement.spacedBy(3.dp)
+                            ) {
+                                Text(
+                                    if (showTransportDetails) "Hide connection details" else "Connection · Reticulum / LXMF",
+                                    style = MaterialTheme.typography.titleMedium
+                                )
+                                Text(
+                                    if (transportStarted) "Active locally · no peer confirmed"
+                                    else "Not started · messages remain local",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+                        if (showTransportDetails) {
+                            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Text(transportStatus, style = MaterialTheme.typography.bodySmall)
+                                if (lxmfAddress != null) {
+                                    Text("Your LXMF address", style = MaterialTheme.typography.labelMedium)
+                                    Text(lxmfAddress, style = MaterialTheme.typography.bodySmall)
+                                    TextButton(onClick = onCopyAddress) { Text("Copy address") }
+                                }
+                                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    Button(onClick = onStartTransport, enabled = !transportStarted) {
+                                        Text("Start transport")
+                                    }
+                                    TextButton(onClick = onAnnounce, enabled = transportStarted) {
+                                        Text("Announce")
+                                    }
+                                }
+                                Text(
+                                    "Start loads your saved identity. Announce advertises your address; neither sends a message.",
+                                    style = MaterialTheme.typography.bodySmall
+                                )
+                                androidx.compose.material3.HorizontalDivider()
+                                Text("Diagnostics", style = MaterialTheme.typography.titleSmall)
+                                Text(runtimeStatus, style = MaterialTheme.typography.bodySmall)
+                                TextButton(onClick = onCheckRuntime) { Text("Check embedded runtime") }
+                                Text(
+                                    "Import check only. It does not connect, announce, or send messages.",
+                                    style = MaterialTheme.typography.bodySmall
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+            item {
+                Card(modifier = Modifier.fillMaxWidth()) {
+                    Column(
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 8.dp)
+                    ) {
+                        TextButton(
+                            onClick = { showIdentityDetails = !showIdentityDetails },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text(
+                                if (showIdentityDetails) "Hide identity details" else "Identity details",
+                                style = MaterialTheme.typography.titleMedium
+                            )
+                        }
+                        if (showIdentityDetails) {
+                            Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                                Text("Player · ${playerId.take(8)}…", style = MaterialTheme.typography.bodyMedium)
+                                Text("This device · ${nodeId.take(8)}…", style = MaterialTheme.typography.bodyMedium)
+                                androidx.compose.material3.HorizontalDivider()
+                                Text("Android device-key fingerprint", style = MaterialTheme.typography.labelMedium)
+                                Text(fingerprint, style = MaterialTheme.typography.bodySmall)
+                                Text(
+                                    "Separate from your Reticulum/LXMF identity. Private keys stay on this device.",
+                                    style = MaterialTheme.typography.bodySmall
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+            item {
+                Text(
+                    "Pull down to refresh your local conversations and contacts.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            // Keep a small scroll runway on short inboxes so swipe gestures
+            // remain discoverable even when the visible cards fit the screen.
+            item { Spacer(modifier = Modifier.padding(bottom = 112.dp)) }
         }
-        Text("Local storage only · No internet or server required", style = MaterialTheme.typography.bodySmall)
     }
 }
 
 @Composable
 private fun ContactsScreen(
     contacts: List<Contact>,
+    onShareInvite: () -> Unit,
     onBack: () -> Unit,
+    onValidateInvite: (String, (String?, String?) -> Unit) -> Unit,
+    onSaveVerifiedInvite: (String) -> Unit,
     onAddContact: (String, String) -> Unit,
     onStartConversation: (String) -> Unit
 ) {
     var name by remember { mutableStateOf("") }
     var address by remember { mutableStateOf("") }
+    var inviteText by remember { mutableStateOf("") }
+    var validatedInvite by remember { mutableStateOf<String?>(null) }
+    var validating by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
 
-    Column(
-        modifier = Modifier.fillMaxSize().padding(20.dp),
+    LazyColumn(
+        modifier = Modifier.fillMaxSize(),
+        contentPadding = androidx.compose.foundation.layout.PaddingValues(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        TextButton(onClick = onBack) { Text("‹ Conversations") }
-        Text("Contacts", style = MaterialTheme.typography.headlineMedium)
-        Text("Add a contact using their 32-character LXMF destination. Contacts are stored only on this device.")
-        OutlinedTextField(
-            value = name,
-            onValueChange = { name = it; error = null },
-            label = { Text("Contact name") },
-            modifier = Modifier.fillMaxWidth(),
-            singleLine = true
-        )
-        OutlinedTextField(
-            value = address,
-            onValueChange = { address = it; error = null },
-            label = { Text("LXMF destination (32 hex characters)") },
-            modifier = Modifier.fillMaxWidth(),
-            singleLine = true
-        )
-        if (error != null) Text(error!!, color = MaterialTheme.colorScheme.error)
-        Button(
-            onClick = {
-                try {
-                    onAddContact(name, address)
-                    name = ""
-                    address = ""
-                    error = null
-                } catch (exception: Exception) {
-                    error = exception.message ?: "Could not add contact."
-                }
-            },
-            enabled = name.isNotBlank() && address.isNotBlank()
-        ) { Text("Save contact") }
-
-        Text("Saved contacts", style = MaterialTheme.typography.titleLarge)
-        if (contacts.isEmpty()) {
-            Text("No contacts yet.")
-        } else {
-            LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                items(contacts, key = { it.id }) { contact ->
-                    Card(modifier = Modifier.fillMaxWidth()) {
-                        Column(modifier = Modifier.padding(12.dp)) {
-                            Text(contact.name, style = MaterialTheme.typography.titleMedium)
-                            Text(contact.destination, style = MaterialTheme.typography.bodySmall)
-                            Text("Unverified · Address saved locally", style = MaterialTheme.typography.labelSmall)
-                            TextButton(onClick = { onStartConversation(contact.id) }) {
-                                Text("Start conversation")
+        item {
+            TextButton(onClick = onBack) { Text("‹ Conversations") }
+            Text("Contacts", style = MaterialTheme.typography.headlineMedium)
+            Text(
+                "Add people to your address book. Share your invite so others can add you.",
+                style = MaterialTheme.typography.bodySmall
+            )
+        }
+        item {
+            Card(modifier = Modifier.fillMaxWidth()) {
+                Column(
+                    modifier = Modifier.fillMaxWidth().padding(14.dp),
+                    verticalArrangement = Arrangement.spacedBy(9.dp)
+                ) {
+                    Text("Add from invite", style = MaterialTheme.typography.titleMedium)
+                    Text(
+                        "Paste the contact invite someone shared with you. The public key and LXMF address are checked before saving.",
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                    OutlinedTextField(
+                        value = inviteText,
+                        onValueChange = { inviteText = it; validatedInvite = null; error = null },
+                        label = { Text("Paste contact invite") },
+                        modifier = Modifier.fillMaxWidth(),
+                        minLines = 3,
+                        maxLines = 6
+                    )
+                    Button(
+                        onClick = {
+                            validating = true
+                            error = null
+                            validatedInvite = null
+                            onValidateInvite(inviteText) { result, failure ->
+                                validating = false
+                                validatedInvite = result
+                                error = failure
                             }
+                        },
+                        enabled = inviteText.isNotBlank() && !validating,
+                        modifier = Modifier.fillMaxWidth()
+                    ) { Text(if (validating) "Checking invite..." else "Verify invite") }
+                    if (validatedInvite != null) {
+                        val verified = JSONObject(validatedInvite!!)
+                        Text("Verified contact", style = MaterialTheme.typography.titleSmall)
+                        Text(verified.getString("display_name"), style = MaterialTheme.typography.titleMedium)
+                        Text("LXMF · ${verified.getString("lxmf_destination")}", style = MaterialTheme.typography.bodySmall)
+                        Button(
+                            onClick = {
+                                try {
+                                    onSaveVerifiedInvite(validatedInvite!!)
+                                    inviteText = ""
+                                    validatedInvite = null
+                                    error = null
+                                } catch (exception: Exception) {
+                                    error = exception.message ?: "Could not save contact."
+                                }
+                            },
+                            modifier = Modifier.fillMaxWidth()
+                        ) { Text("Add verified contact") }
+                    }
+                    if (error != null) {
+                        Text(error!!, color = MaterialTheme.colorScheme.error)
+                    }
+                }
+            }
+        }
+        item {
+            Card(modifier = Modifier.fillMaxWidth()) {
+                Column(
+                    modifier = Modifier.fillMaxWidth().padding(14.dp),
+                    verticalArrangement = Arrangement.spacedBy(9.dp)
+                ) {
+                    Text("Add contact", style = MaterialTheme.typography.titleMedium)
+                    Button(onClick = onShareInvite, modifier = Modifier.fillMaxWidth()) {
+                        Text("Share my contact invite")
+                    }
+                    OutlinedTextField(
+                        value = name,
+                        onValueChange = { name = it; error = null },
+                        label = { Text("Contact name") },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true
+                    )
+                    OutlinedTextField(
+                        value = address,
+                        onValueChange = { address = it; error = null },
+                        label = { Text("LXMF address · 32 hex characters") },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true
+                    )
+                    if (error != null) {
+                        Text(error!!, color = MaterialTheme.colorScheme.error)
+                    }
+                    Button(
+                        onClick = {
+                            try {
+                                onAddContact(name, address)
+                                name = ""
+                                address = ""
+                                error = null
+                            } catch (exception: Exception) {
+                                error = exception.message ?: "Could not add contact."
+                            }
+                        },
+                        enabled = name.isNotBlank() && address.isNotBlank(),
+                        modifier = Modifier.fillMaxWidth()
+                    ) { Text("Save contact") }
+                }
+            }
+        }
+        item { Text("Saved contacts · ${contacts.size}", style = MaterialTheme.typography.titleLarge) }
+        if (contacts.isEmpty()) {
+            item {
+                Text("No contacts yet.", style = MaterialTheme.typography.bodyMedium)
+            }
+        } else {
+            items(contacts, key = { it.id }) { contact ->
+                Card(modifier = Modifier.fillMaxWidth()) {
+                    Column(
+                        modifier = Modifier.fillMaxWidth().padding(14.dp),
+                        verticalArrangement = Arrangement.spacedBy(5.dp)
+                    ) {
+                        Text(contact.name, style = MaterialTheme.typography.titleMedium)
+                        Text(contact.destination, style = MaterialTheme.typography.bodySmall)
+                        Text(
+                            if (contact.verified) "Verified Reticulum identity" else "Unverified · address saved locally",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        TextButton(onClick = { onStartConversation(contact.id) }) {
+                            Text("Start conversation")
                         }
                     }
                 }
@@ -378,63 +801,111 @@ private fun ChatScreen(
     onSend: (String) -> Unit
 ) {
     var draft by remember(conversation.id) { mutableStateOf("") }
+    val hasValidRecipient = conversation.recipientAddress
+        ?.let { Regex("^[0-9a-f]{32}$").matches(it) } == true
     Column(
-        modifier = Modifier.fillMaxSize().padding(16.dp),
+        modifier = Modifier.fillMaxSize().imePadding().padding(horizontal = 16.dp, vertical = 10.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
-        Row(modifier = Modifier.fillMaxWidth()) {
-            TextButton(onClick = onBack) { Text("‹ Conversations") }
-            Column(modifier = Modifier.weight(1f).padding(top = 8.dp)) {
-                Text(conversation.title, style = MaterialTheme.typography.titleLarge)
+        Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+            TextButton(onClick = onBack) { Text("‹ Back") }
+            Column(modifier = Modifier.weight(1f).padding(start = 4.dp)) {
+                Text(conversation.title, style = MaterialTheme.typography.titleLarge, maxLines = 1)
                 Text(
-                    conversation.recipientAddress?.let { "Recipient: $it · unverified" }
-                        ?: "Private local conversation",
-                    style = MaterialTheme.typography.bodySmall
+                    conversation.recipientAddress?.let {
+                        if (conversation.recipientVerified) "Verified LXMF contact" else "LXMF destination · not verified"
+                    } ?: "Private local conversation",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
         }
-        if (messages.isEmpty()) {
-            Text("No messages yet. Send a note to create your first encrypted local message.")
-        } else {
-            LazyColumn(
-                modifier = Modifier.weight(1f).fillMaxWidth(),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
+        LazyColumn(
+            modifier = Modifier.weight(1f).fillMaxWidth(),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            if (messages.isEmpty()) {
+                item {
+                    Card(modifier = Modifier.fillMaxWidth()) {
+                        Text(
+                            if (hasValidRecipient)
+                                "No messages yet. Write a message to queue it locally for this saved recipient."
+                            else
+                                "Private notes stay on this device. They are not sent to anyone.",
+                            modifier = Modifier.padding(16.dp),
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                    }
+                }
+            } else {
                 items(messages, key = { it.id }) { message ->
                     Card(modifier = Modifier.fillMaxWidth()) {
-                        Column(modifier = Modifier.padding(12.dp)) {
-                            Text(message.text)
+                        Column(
+                            modifier = Modifier.fillMaxWidth().padding(12.dp),
+                            verticalArrangement = Arrangement.spacedBy(5.dp)
+                        ) {
+                            Text(message.text, style = MaterialTheme.typography.bodyLarge)
                             Text(
-                                "${DateFormat.getTimeInstance(DateFormat.SHORT).format(Date(message.createdAt))} · ${message.status.lowercase()}",
-                                style = MaterialTheme.typography.labelSmall
+                                "${DateFormat.getTimeInstance(DateFormat.SHORT).format(Date(message.createdAt))} · ${when (message.status) {
+                                    "LOCAL_ONLY" -> "saved locally · not sent"
+                                    "QUEUED" -> "queued securely"
+                                    "WAITING_FOR_ROUTE" -> "waiting for route"
+                                    "WAITING_FOR_IDENTITY" -> "discovering recipient"
+                                    "SUBMITTED" -> "submitted to LXMF"
+                                    "SENT" -> "sent · awaiting delivery proof"
+                                    "DELIVERED" -> "delivered"
+                                    "FAILED" -> "failed · retained locally"
+                                    "REJECTED" -> "rejected"
+                                    "RECEIVED" -> "received"
+                                    "REQUEST" -> "message request"
+                                    else -> message.status.lowercase()
+                                }}",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
                     }
                 }
             }
         }
-        Spacer(modifier = Modifier.weight(0.01f))
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = androidx.compose.ui.Alignment.Bottom
+        ) {
             OutlinedTextField(
                 value = draft,
                 onValueChange = { draft = it },
                 modifier = Modifier.weight(1f),
-                label = { Text("Message") }
+                label = { Text("Message") },
+                placeholder = { Text("Write a message") },
+                maxLines = 4
             )
-            Button(onClick = {
-                val text = draft.trim()
-                if (text.isNotEmpty()) {
-                    onSend(text)
-                    draft = ""
-                }
-            }, enabled = draft.isNotBlank()) { Text("Send") }
+            Button(
+                onClick = {
+                    val text = draft.trim()
+                    if (text.isNotEmpty()) {
+                        onSend(text)
+                        draft = ""
+                    }
+                },
+                enabled = draft.isNotBlank()
+            ) { Text(if (hasValidRecipient) "Send" else "Save note") }
+        }
+        if (!hasValidRecipient) {
+            Text(
+                "Private local thread · notes are saved only on this device and are never sent.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
         }
         Text(
-            if (conversation.recipientAddress == null)
-                "Queued on this device · Local-only"
+            if (!hasValidRecipient)
+                "Local only · not sent"
             else
-                "Queued on this device · Recipient saved, not yet sent",
-            style = MaterialTheme.typography.bodySmall
+                "Queued locally · Destination saved, not yet sent",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
         )
     }
 }
