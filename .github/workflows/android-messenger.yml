@@ -98,6 +98,8 @@ jobs:
         run: echo "$KEYSTORE_BASE64" | base64 --decode > "$ANDROID_KEYSTORE_PATH"
       - name: Assemble signed stable APK
         if: steps.signing.outputs.enabled == 'true'
+        env:
+          ANDROID_KEYSTORE_PATH: ${{ runner.temp }}/urban-alchemy-release.jks
         run: gradle --no-daemon :app:assembleRelease
       - name: Upload stable APK
         if: steps.signing.outputs.enabled == 'true'
