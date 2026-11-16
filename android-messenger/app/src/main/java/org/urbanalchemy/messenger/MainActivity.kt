@@ -589,7 +589,7 @@ private fun ChatScreen(
                         ) {
                             Text(message.text, style = MaterialTheme.typography.bodyLarge)
                             Text(
-                                "${DateFormat.getTimeInstance(DateFormat.SHORT).format(Date(message.createdAt))} · ${message.status.lowercase()}",
+                                "${DateFormat.getTimeInstance(DateFormat.SHORT).format(Date(message.createdAt))} · ${if (message.status == "LOCAL_ONLY") "saved locally · not sent" else message.status.lowercase()}",
                                 style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
