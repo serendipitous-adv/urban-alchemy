@@ -51,18 +51,23 @@ class AuthenticatedSessionEstablisherTest {
         )
     }
 
-    @After fun tearDown() {
-        dbNames.forEach(context::deleteDatabase)
-    }
+    @After fun tearDown() { dbNames.forEach(context::deleteDatabase) }
 
-    @Test fun bothPeersEstablishTheSameSessionKeyWithoutEachOthersPrivateKeys() {
+    private fun verifiedAlice() = SignedSessionHandshake.verifyOffer(
+        aliceOffer, aliceOffer.senderFingerprint, aliceOffer.recipientFingerprint,
+        alice.public, now + 1_000L
+    )
+    private fun verifiedBob() = SignedSessionHandshake.verifyOffer(
+        bobOffer, bobOffer.senderFingerprint, bobOffer.recipientFingerprint,
+        bob.public, now + 1_000L
+    )
+
+    @Test fun bothPeersEstablishSameKeyUsingOnlyTheirOwnEphemeralPrivateKey() {
         val aliceSession = AuthenticatedSessionEstablisher(guard()).establish(
-            aliceOffer, bobOffer, alice.public, bob.public,
-            aliceEphemeral, now + 1_000L, true
+            aliceOffer, bobOffer, alice.public, bob.public, aliceEphemeral, now + 1_000L, true
         )
         val bobSession = AuthenticatedSessionEstablisher(guard()).establish(
-            aliceOffer, bobOffer, alice.public, bob.public,
-            bobEphemeral, now + 1_000L, false
+            aliceOffer, bobOffer, alice.public, bob.public, bobEphemeral, now + 1_000L, false
         )
         val aliceKey = aliceSession.copySessionKey()
         val bobKey = bobSession.copySessionKey()
@@ -74,17 +79,15 @@ class AuthenticatedSessionEstablisherTest {
         catch (_: IllegalStateException) { }
     }
 
-    @Test fun replayedOfferIsRejectedBeforeAnotherSessionIsReturned() {
+    @Test fun replayedOfferPairIsRejected() {
         val establisher = AuthenticatedSessionEstablisher(guard())
         val first = establisher.establish(
-            aliceOffer, bobOffer, alice.public, bob.public,
-            aliceEphemeral, now + 1_000L, true
+            aliceOffer, bobOffer, alice.public, bob.public, aliceEphemeral, now + 1_000L, true
         )
         first.close()
         try {
             establisher.establish(
-                aliceOffer, bobOffer, alice.public, bob.public,
-                aliceEphemeral, now + 1_000L, true
+                aliceOffer, bobOffer, alice.public, bob.public, aliceEphemeral, now + 1_000L, true
             )
             fail("Previously accepted offers must be rejected.")
         } catch (_: IllegalArgumentException) { }
@@ -93,8 +96,7 @@ class AuthenticatedSessionEstablisherTest {
     @Test fun wrongLocalEphemeralKeyIsRejected() {
         try {
             AuthenticatedSessionEstablisher(guard()).establish(
-                aliceOffer, bobOffer, alice.public, bob.public,
-                keyPair(), now + 1_000L, true
+                aliceOffer, bobOffer, alice.public, bob.public, keyPair(), now + 1_000L, true
             )
             fail("Mismatched local ephemeral key must be rejected.")
         } catch (_: IllegalArgumentException) { }
@@ -105,17 +107,20 @@ class AuthenticatedSessionEstablisherTest {
         val replay = guard()
         try {
             AuthenticatedSessionEstablisher(replay).establish(
-                tampered, bobOffer, alice.public, bob.public,
-                aliceEphemeral, now + 1_000L, true
+                tampered, bobOffer, alice.public, bob.public, aliceEphemeral, now + 1_000L, true
             )
             fail("Tampered offer must be rejected.")
         } catch (_: IllegalArgumentException) { }
-        assertTrue(replay.recordAccepted(
-            SignedSessionHandshake.verifyOffer(
-                aliceOffer, aliceOffer.senderFingerprint, aliceOffer.recipientFingerprint,
-                alice.public, now + 1_000L
-            ), now + 1_000L
-        ))
+        assertTrue(replay.recordAccepted(verifiedAlice(), now + 1_000L))
+        replay.close()
+    }
+
+    @Test fun pairAcceptanceRollsBackFirstOfferWhenSecondWasAlreadyAccepted() {
+        val replay = guard()
+        assertTrue(replay.recordAccepted(verifiedBob(), now + 1_000L))
+        assertFalse(replay.recordAcceptedPair(verifiedAlice(), verifiedBob(), now + 1_000L))
+        // The first insert from the failed pair must have rolled back.
+        assertTrue(replay.recordAccepted(verifiedAlice(), now + 1_000L))
         replay.close()
     }
 }

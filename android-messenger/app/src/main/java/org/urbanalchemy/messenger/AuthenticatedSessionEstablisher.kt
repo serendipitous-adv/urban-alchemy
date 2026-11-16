@@ -4,9 +4,8 @@ import java.security.KeyPair
 import java.security.PublicKey
 
 /**
- * Verifies both pinned-peer offers, consumes their replay IDs, and derives the
- * session key using only this device's ephemeral private key. The peer's
- * ephemeral private key is never available to or required by this device.
+ * Verifies both pinned-peer offers, consumes their replay IDs atomically, and
+ * derives the session key using only this device's ephemeral private key.
  */
 class AuthenticatedSessionEstablisher(private val replayGuard: SessionReplayGuard) {
 
@@ -34,12 +33,6 @@ class AuthenticatedSessionEstablisher(private val replayGuard: SessionReplayGuar
         }
     }
 
-    /**
-     * Offers are ordered by role, not by local perspective. Both signing keys
-     * must already be pinned to fingerprints verified out of band. Only the
-     * local ephemeral key pair is accepted; the peer contributes a public key
-     * in its signed offer.
-     */
     fun establish(
         initiatorOffer: SignedSessionHandshake.Offer,
         responderOffer: SignedSessionHandshake.Offer,
@@ -69,12 +62,9 @@ class AuthenticatedSessionEstablisher(private val replayGuard: SessionReplayGuar
             "Local ephemeral key does not match the local signed offer."
         }
 
-        // Consume both signed offer IDs before deriving or returning a session key.
-        require(replayGuard.recordAccepted(verifiedInitiator, nowEpochMillis)) {
-            "Initiator session offer has already been accepted."
-        }
-        require(replayGuard.recordAccepted(verifiedResponder, nowEpochMillis)) {
-            "Responder session offer has already been accepted."
+        // Both replay IDs are committed together or neither is.
+        require(replayGuard.recordAcceptedPair(verifiedInitiator, verifiedResponder, nowEpochMillis)) {
+            "A session offer has already been accepted."
         }
 
         val key = SessionKeyAgreement.deriveSessionKey(localEphemeralKeyPair, transcript, localIsInitiator)
