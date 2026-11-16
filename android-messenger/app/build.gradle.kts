@@ -31,6 +31,7 @@ android {
         create("release") {
             if (!releaseStoreFile.isNullOrBlank()) {
                 storeFile = file(releaseStoreFile)
+                storeType = "pkcs12"
                 storePassword = releaseStorePassword
                 keyAlias = releaseKeyAlias
                 keyPassword = releaseKeyPassword
