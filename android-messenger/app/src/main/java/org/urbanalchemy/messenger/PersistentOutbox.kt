@@ -93,25 +93,70 @@ class PersistentOutbox(context: Context) : SQLiteOpenHelper(context, "ua_transpo
         val db = writableDatabase
         val staleIds = mutableListOf<String>()
         val peerClause = if (recipientIdentity == null) "" else " AND recipient_identity = ?"
-        val args = mutableListOf(DeliveryState.SENT.name, cutoff.toString())
+        val args = mutableListOf(DeliveryState.SENT.name, cutoff.toString(), nowEpochMillis.toString())
         if (recipientIdentity != null) args += recipientIdentity
         db.query(
             "outbox", arrayOf("message_id"),
             "state = ? AND sent_at IS NOT NULL AND sent_at <= ? AND (expires_at IS NULL OR expires_at > ?)$peerClause",
-            (args.take(2) + listOf(nowEpochMillis.toString()) + args.drop(2)).toTypedArray(),
-            null, null, "sent_at ASC"
+            args.toTypedArray(), null, null, "sent_at ASC"
         ).use { cursor -> while (cursor.moveToNext()) staleIds += cursor.getString(0) }
-        val recovered = mutableListOf<OutboxRecord>()
-        staleIds.forEach { id ->
-            val failed = runCatching {
-                transition(id, DeliveryState.FAILED, "Delivery receipt timed out.", nowEpochMillis)
-            }.getOrNull() ?: return@forEach
-            when (scheduleRetry(id, nowEpochMillis, maxRetries = maxRetries)) {
-                is OutboxRetryPolicy.Decision.RetryAt -> find(writableDatabase, id)?.let(recovered::add)
-                is OutboxRetryPolicy.Decision.Stop -> recovered += failed
+
+        // Re-check the SENT state and perform timeout + retry scheduling atomically.
+        // A signed receipt racing this recovery either commits first (so this skips it)
+        // or commits afterward (and changes QUEUED/FAILED to DELIVERED).
+        return staleIds.mapNotNull { id ->
+            inTransaction { tx ->
+                val current = find(tx, id) ?: return@inTransaction null
+                val sentAt = current.sentAtEpochMillis ?: return@inTransaction null
+                if (current.state != DeliveryState.SENT ||
+                    sentAt > cutoff ||
+                    (recipientIdentity != null && current.recipientIdentity != recipientIdentity) ||
+                    (current.expiresAtEpochMillis != null && current.expiresAtEpochMillis <= nowEpochMillis)
+                ) return@inTransaction null
+
+                val failed = MessageDelivery.transition(
+                    current, DeliveryState.FAILED, "Delivery receipt timed out.", nowEpochMillis
+                )
+                when (val decision = OutboxRetryPolicy.decide(
+                    failed, nowEpochMillis, nowEpochMillis, maxRetries
+                )) {
+                    is OutboxRetryPolicy.Decision.RetryAt -> {
+                        val queued = MessageDelivery.transition(failed, DeliveryState.QUEUED)
+                        val values = ContentValues().apply {
+                            put("state", queued.state.name)
+                            put("attempt_count", queued.attemptCount)
+                            putNull("last_error")
+                            put("next_attempt_at", decision.epochMillis)
+                            putNull("sent_at")
+                            putNull("lease_token")
+                            putNull("lease_until")
+                        }
+                        tx.update(
+                            "outbox", values,
+                            "message_id = ? AND state = ? AND sent_at = ?",
+                            arrayOf(id, DeliveryState.SENT.name, sentAt.toString())
+                        )
+                        find(tx, id)
+                    }
+                    is OutboxRetryPolicy.Decision.Stop -> {
+                        val values = ContentValues().apply {
+                            put("state", failed.state.name)
+                            put("last_error", failed.lastError)
+                            put("next_attempt_at", 0L)
+                            putNull("sent_at")
+                            putNull("lease_token")
+                            putNull("lease_until")
+                        }
+                        tx.update(
+                            "outbox", values,
+                            "message_id = ? AND state = ? AND sent_at = ?",
+                            arrayOf(id, DeliveryState.SENT.name, sentAt.toString())
+                        )
+                        find(tx, id)
+                    }
+                }
             }
         }
-        return recovered
     }
 
     /** Atomically converts a failed record back to QUEUED at its persisted retry time. */
