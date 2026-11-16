@@ -67,6 +67,7 @@ class LocalStore(context: Context) : SQLiteOpenHelper(context, "ua_messenger.db"
         createMessagesTable(db)
         createUaIdentityTable(db)
         db.execSQL("CREATE INDEX messages_conversation_time ON messages(conversation_id, created_at)")
+        db.execSQL("CREATE UNIQUE INDEX messages_lxmf_hash ON messages(lxmf_hash) WHERE lxmf_hash IS NOT NULL")
     }
 
     private fun createUaIdentityTable(db: SQLiteDatabase) {
