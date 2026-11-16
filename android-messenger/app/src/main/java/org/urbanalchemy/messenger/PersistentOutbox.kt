@@ -5,6 +5,7 @@ import android.content.Context
 import android.database.sqlite.SQLiteDatabase
 import android.database.sqlite.SQLiteOpenHelper
 import java.util.UUID
+import java.security.PublicKey
 
 /** Durable outbox with additive retry metadata and crash-recoverable exclusive claims. */
 class PersistentOutbox(context: Context) : SQLiteOpenHelper(context, "ua_transport_outbox.db", null, DATABASE_VERSION) {
@@ -156,16 +157,58 @@ class PersistentOutbox(context: Context) : SQLiteOpenHelper(context, "ua_transpo
         updated
     }
 
-    fun acknowledge(ack: DeliveryAcknowledgement): OutboxRecord = inTransaction { db ->
+    /** Decode, authenticate, and atomically apply a signed receipt from the wire. */
+    fun acknowledgeVerifiedBase64(
+        encodedAcknowledgement: String,
+        originalSenderFingerprint: String,
+        recipientSigningPublicKey: PublicKey,
+        nowEpochMillis: Long
+    ): OutboxRecord = acknowledgeVerified(
+        SignedDeliveryAcknowledgementCodec.decodeBase64(encodedAcknowledgement),
+        originalSenderFingerprint,
+        recipientSigningPublicKey,
+        nowEpochMillis
+    )
+
+    /** Verify the receipt against the pinned recipient key inside the same DB transaction as delivery. */
+    fun acknowledgeVerified(
+        acknowledgement: SignedDeliveryAcknowledgement,
+        originalSenderFingerprint: String,
+        recipientSigningPublicKey: PublicKey,
+        nowEpochMillis: Long
+    ): OutboxRecord = inTransaction { db ->
+        val current = find(db, acknowledgement.messageId) ?: error("Outbox message not found.")
+        val verified = SignedDeliveryAcknowledgement.verify(
+            acknowledgement = acknowledgement,
+            expectedMessageId = current.messageId,
+            expectedOriginalSenderFingerprint = originalSenderFingerprint,
+            expectedRecipientFingerprint = current.recipientIdentity,
+            recipientSigningPublicKey = recipientSigningPublicKey,
+            nowEpochMillis = nowEpochMillis,
+            messageCreatedAtEpochMillis = current.createdAtEpochMillis
+        )
+        persistAcknowledgement(db, current, verified)
+    }
+
+    /** Unsigned acknowledgements are retained only for internal tests/migrations. */
+    internal fun acknowledge(ack: DeliveryAcknowledgement): OutboxRecord = inTransaction { db ->
         val current = find(db, ack.messageId) ?: error("Outbox message not found.")
-        val updated = MessageDelivery.acknowledge(current, ack)
+        persistAcknowledgement(db, current, ack)
+    }
+
+    private fun persistAcknowledgement(
+        db: SQLiteDatabase,
+        current: OutboxRecord,
+        acknowledgement: DeliveryAcknowledgement
+    ): OutboxRecord {
+        val updated = MessageDelivery.acknowledge(current, acknowledgement)
         val values = ContentValues().apply {
             put("state", updated.state.name)
             putNull("last_error"); put("next_attempt_at", 0L)
             putNull("lease_token"); putNull("lease_until")
         }
         db.update("outbox", values, "message_id = ?", arrayOf(updated.messageId))
-        updated
+        return updated
     }
 
     private fun requireLease(db: SQLiteDatabase, claim: OutboxClaim) {
