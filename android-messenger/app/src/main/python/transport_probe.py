@@ -95,6 +95,8 @@ def start_runtime(storage_path, display_name="Urban Alchemy"):
 
         public_info = {
             "destination": source.hash.hex(),
+            "reticulum_identity_hash": identity.hash.hex(),
+            "reticulum_public_key": identity.get_public_key().hex(),
             "display_name": display_name,
             "identity_persisted": identity_path.exists(),
             "reticulum_started": True,

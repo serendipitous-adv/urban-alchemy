@@ -6,6 +6,14 @@ import android.database.sqlite.SQLiteDatabase
 import android.database.sqlite.SQLiteOpenHelper
 import java.util.UUID
 
+data class UaLocalIdentity(
+    val playerId: String,
+    val nodeId: String,
+    val reticulumIdentityHash: String? = null,
+    val reticulumPublicKey: String? = null,
+    val lxmfDestination: String? = null
+)
+
 data class Contact(
     val id: String,
     val name: String,
@@ -30,7 +38,7 @@ data class LocalMessage(
     val status: String
 )
 
-class LocalStore(context: Context) : SQLiteOpenHelper(context, "ua_messenger.db", null, 3) {
+class LocalStore(context: Context) : SQLiteOpenHelper(context, "ua_messenger.db", null, 4) {
     override fun onCreate(db: SQLiteDatabase) {
         db.execSQL(
             """CREATE TABLE contacts (
@@ -49,7 +57,22 @@ class LocalStore(context: Context) : SQLiteOpenHelper(context, "ua_messenger.db"
             )""".trimIndent()
         )
         createMessagesTable(db)
+        createUaIdentityTable(db)
         db.execSQL("CREATE INDEX messages_conversation_time ON messages(conversation_id, created_at)")
+    }
+
+    private fun createUaIdentityTable(db: SQLiteDatabase) {
+        db.execSQL(
+            """CREATE TABLE ua_local_identity (
+                singleton_id INTEGER PRIMARY KEY CHECK(singleton_id = 1),
+                player_id TEXT NOT NULL,
+                node_id TEXT NOT NULL,
+                reticulum_identity_hash TEXT,
+                reticulum_public_key TEXT,
+                lxmf_destination TEXT,
+                updated_at INTEGER NOT NULL
+            )""".trimIndent()
+        )
     }
 
     private fun createMessagesTable(db: SQLiteDatabase) {
@@ -83,6 +106,62 @@ class LocalStore(context: Context) : SQLiteOpenHelper(context, "ua_messenger.db"
             )
             db.execSQL("ALTER TABLE conversations ADD COLUMN contact_id TEXT REFERENCES contacts(id) ON DELETE SET NULL")
         }
+        if (oldVersion < 4) {
+            createUaIdentityTable(db)
+        }
+    }
+
+    @Synchronized
+    fun getOrCreateUaIdentity(): UaLocalIdentity {
+        readableDatabase.rawQuery(
+            "SELECT player_id, node_id, reticulum_identity_hash, reticulum_public_key, lxmf_destination FROM ua_local_identity WHERE singleton_id = 1",
+            null
+        ).use { cursor ->
+            if (cursor.moveToFirst()) {
+                return UaLocalIdentity(
+                    cursor.getString(0), cursor.getString(1),
+                    cursor.getString(2), cursor.getString(3), cursor.getString(4)
+                )
+            }
+        }
+        val identity = UaLocalIdentity(UUID.randomUUID().toString(), UUID.randomUUID().toString())
+        val values = ContentValues().apply {
+            put("singleton_id", 1)
+            put("player_id", identity.playerId)
+            put("node_id", identity.nodeId)
+            put("updated_at", System.currentTimeMillis())
+        }
+        writableDatabase.insertOrThrow("ua_local_identity", null, values)
+        return identity
+    }
+
+    @Synchronized
+    fun bindReticulumIdentity(publicIdentityHash: String, publicKeyHex: String, destination: String): UaLocalIdentity {
+        require(Regex("^[0-9a-f]{32}$").matches(publicIdentityHash)) { "Invalid Reticulum identity hash." }
+        require(publicKeyHex.matches(Regex("^(?:[0-9a-f]{2})+$"))) { "Invalid Reticulum public key." }
+        require(Regex("^[0-9a-f]{32}$").matches(destination)) { "Invalid LXMF destination." }
+        val current = getOrCreateUaIdentity()
+        if (current.reticulumIdentityHash != null && current.reticulumIdentityHash != publicIdentityHash) {
+            error("The saved UA node is already bound to a different Reticulum identity. Refusing silent identity replacement.")
+        }
+        if (current.reticulumPublicKey != null && current.reticulumPublicKey != publicKeyHex) {
+            error("Reticulum public key does not match the saved node binding.")
+        }
+        if (current.lxmfDestination != null && current.lxmfDestination != destination) {
+            error("LXMF destination does not match the saved node binding.")
+        }
+        val values = ContentValues().apply {
+            put("reticulum_identity_hash", publicIdentityHash)
+            put("reticulum_public_key", publicKeyHex)
+            put("lxmf_destination", destination)
+            put("updated_at", System.currentTimeMillis())
+        }
+        writableDatabase.update("ua_local_identity", values, "singleton_id = 1", null)
+        return current.copy(
+            reticulumIdentityHash = publicIdentityHash,
+            reticulumPublicKey = publicKeyHex,
+            lxmfDestination = destination
+        )
     }
 
     fun addContact(name: String, destinationInput: String): String {
@@ -161,6 +240,19 @@ class LocalStore(context: Context) : SQLiteOpenHelper(context, "ua_messenger.db"
     }
 
     fun addQueuedMessage(conversationId: Long, text: String): String {
+        require(text.isNotBlank()) { "Message cannot be empty." }
+        val recipient = readableDatabase.rawQuery(
+            """SELECT p.destination
+                FROM conversations c
+                LEFT JOIN contacts p ON p.id = c.contact_id
+                WHERE c.id = ?""",
+            arrayOf(conversationId.toString())
+        ).use { cursor ->
+            if (cursor.moveToFirst()) cursor.getString(0) else null
+        }
+        require(recipient != null && Regex("^[0-9a-f]{32}$").matches(recipient)) {
+            "A valid saved LXMF recipient is required before a message can be queued."
+        }
         val sealed = LocalMessageCrypto.encrypt(text)
         val id = UUID.randomUUID().toString()
         val values = ContentValues().apply {
@@ -169,6 +261,28 @@ class LocalStore(context: Context) : SQLiteOpenHelper(context, "ua_messenger.db"
             put("body", "")
             put("created_at", System.currentTimeMillis())
             put("status", "QUEUED")
+            put("nonce", sealed.nonce)
+            put("ciphertext", sealed.ciphertext)
+        }
+        writableDatabase.insertOrThrow("messages", null, values)
+        return id
+    }
+
+    fun addLocalMessage(conversationId: Long, text: String): String {
+        require(text.isNotBlank()) { "Note cannot be empty." }
+        val exists = readableDatabase.rawQuery(
+            "SELECT id FROM conversations WHERE id = ?",
+            arrayOf(conversationId.toString())
+        ).use { it.moveToFirst() }
+        require(exists) { "Conversation no longer exists." }
+        val sealed = LocalMessageCrypto.encrypt(text)
+        val id = UUID.randomUUID().toString()
+        val values = ContentValues().apply {
+            put("id", id)
+            put("conversation_id", conversationId)
+            put("body", "")
+            put("created_at", System.currentTimeMillis())
+            put("status", "LOCAL_ONLY")
             put("nonce", sealed.nonce)
             put("ciphertext", sealed.ciphertext)
         }
