@@ -246,6 +246,25 @@ Zero-knowledge proofs or other privacy-preserving cryptographic techniques are p
 
 The protocol MUST NOT claim that a proof is zero-knowledge, unlinkable, or anonymous unless the implemented construction and its threat model substantiate that claim. Metadata, network observation, verifier collusion, and repeated proof requests remain potential correlation channels and MUST be considered in the privacy analysis.
 
+
+### 6.3.6 Granular persona relationships and association disclosure — accepted design direction
+
+UA MUST support explicit, granular relationships between personas and between personas and communities. A participant MAY disclose a relationship to one verifier or community without making that relationship discoverable to the wider network.
+
+Requirements:
+
+1. Persona relationships MUST be represented as scoped assertions or credentials, not inferred from a shared public identifier or a globally visible master key.
+2. A participant MAY disclose that two personas share a recovery authority to a chosen verifier while keeping that relationship private from other verifiers and the wider network.
+3. A participant MAY disclose an association between a persona and a specific Guild, Patch, or other community without disclosing unrelated persona relationships.
+4. Each disclosure MUST specify its scope, intended verifier or audience, purpose, and any applicable validity period or context.
+5. Relationship disclosures SHOULD be independently revocable or supersedable without requiring deletion or replacement of the associated personas.
+6. Revocation MUST be communicated to relevant verifiers or authorities where feasible. The protocol MUST NOT imply that revocation can erase information already learned, copied, or independently retained by a recipient.
+7. A verifier MUST NOT infer broader common control, community membership, or cross-persona association from a narrowly scoped proof unless that inference is explicitly supported by the disclosed claim.
+8. Relationship proofs SHOULD be challenge-bound and minimized to avoid replay and unnecessary correlation. Their metadata and repeated use MUST be included in privacy threat modeling.
+9. Community-specific recognition remains separate from proof of association. A proof that two personas share control does not automatically merge their memberships, reputations, governance rights, or SCAF records.
+
+The protocol SHOULD model relationship disclosure as a participant-controlled authorization rather than a permanent property of either persona. The wire format, credential model, revocation distribution, and practical limits of verifier-specific unlinkability remain open for Phase 1 research and prototype validation.
+
 ### 6.4 Identity, persona, membership, and reputation
 
 These are separate concepts:
@@ -555,6 +574,7 @@ The prototype is accepted only when the following tests pass:
 19. Recovery challenge windows and temporary restrictions are applied according to the relevant community/record authority's published policy, without a universal network-wide delay.
 20. Compromise recovery preserves the stable UA persona identifier while binding it to fresh RNS key material/identity where necessary; historical signatures remain verifiable under their original keys.
 21. A participant can selectively prove a narrowly scoped cross-persona common-control claim to an authorized verifier without publishing a global persona-linkage handle; proof-system claims are validated against an explicit threat model.
+22. A participant can disclose a scoped association between personas or between a persona and a specific community, while withholding that relationship from other audiences; revocation affects future reliance but does not erase information already received.
 
 ## 18. Phase 0 open questions
 
@@ -567,6 +587,7 @@ These remain deliberately unresolved until research or prototype evidence is ava
 - Recovery manifest format and community recovery policies.
 - Stable UA persona identifier and key-transition statement schema, including RNS identity replacement semantics.
 - Privacy-preserving selective proof format for narrowly scoped cross-persona common-control claims.
+- Scoped persona-relationship assertion/credential format, verifier and audience binding, and revocation/expiry distribution.
 - Event identifier construction and canonicalization.
 - Synchronization summary/anti-entropy algorithm.
 - Storage encryption and secure key storage per platform.
@@ -607,6 +628,7 @@ No production application implementation should begin until the Phase 0 exit cri
 | D-012 | Recovery challenge windows and recognition timelines are community-defined; no universal protocol-wide delay | Accepted |
 | D-013 | Preserve the stable UA persona through key rotation/recovery; replace compromised RNS key material and bind fresh RNS identity to the same persona where required | Accepted design direction |
 | D-014 | Support participant-controlled, privacy-preserving selective proofs of narrowly scoped common control across personas; investigate zero-knowledge techniques without prematurely selecting a proof system | Accepted design direction |
+| D-015 | Persona relationships and association disclosures are granular, explicitly scoped, selectively disclosed, and independently revocable; revocation cannot erase information already received | Accepted design direction |
 
 ## 21. Research references
 
