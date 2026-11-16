@@ -96,11 +96,13 @@ fun WifiDirectPanel() {
                     }
                 }
                 override fun onFrame(frame: ByteArray) {
-                    val controller = handshake
-                    if (controller != null && controller.state() != PeerSessionHandshakeController.State.ESTABLISHED) {
-                        handshakeExecutor.execute { controller.receiveFrame(frame) }
-                    } else {
-                        mainHandler.post { status = "Received a UA frame; message handling is not connected yet." }
+                    mainHandler.post {
+                        val controller = handshake
+                        if (controller != null && controller.state() != PeerSessionHandshakeController.State.ESTABLISHED) {
+                            handshakeExecutor.execute { controller.receiveFrame(frame) }
+                        } else {
+                            status = "Received a UA frame; message handling is not connected yet."
+                        }
                     }
                 }
                 override fun onTransportReady(transport: SocketFrameTransport) {
