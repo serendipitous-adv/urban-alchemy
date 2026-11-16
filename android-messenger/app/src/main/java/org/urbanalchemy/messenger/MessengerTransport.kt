@@ -14,7 +14,7 @@ interface ReticulumLxmfTransport {
         fun onReady(localDestination: String)
         fun onStatus(update: LxmfTransportUpdate)
         fun onIncoming(message: LxmfIncomingMessage)
-        fun onError(error: LxmfTransportError)
+        fun onError(error: LxmfLxmfTransportError)
     }
 
     /** Start the transport and load/create its independent persistent network identity. */
@@ -30,21 +30,21 @@ interface ReticulumLxmfTransport {
     suspend fun stop()
 }
 
-data class OutboundTransportMessage(
+data class LxmfOutboundMessage(
     val localMessageId: String,
     val recipientDestination: String,
     val body: String,
     val createdAtEpochMillis: Long
 )
 
-data class IncomingTransportMessage(
+data class LxmfIncomingMessage(
     val transportMessageId: String,
     val senderDestination: String,
     val body: String,
     val receivedAtEpochMillis: Long
 )
 
-data class MessageTransportUpdate(
+data class LxmfTransportUpdate(
     val localMessageId: String,
     val state: State,
     val detail: String? = null
@@ -57,7 +57,7 @@ data class MessageTransportUpdate(
     }
 }
 
-data class TransportError(
+data class LxmfTransportError(
     val code: String,
     val message: String,
     val recoverable: Boolean
