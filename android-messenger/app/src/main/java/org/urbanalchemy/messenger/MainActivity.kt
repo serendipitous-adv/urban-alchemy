@@ -455,7 +455,7 @@ private fun MessengerHome(
                 Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
                     Text("Urban Alchemy", style = MaterialTheme.typography.headlineMedium)
                     Text("Messenger", style = MaterialTheme.typography.titleMedium)
-                    Text("Offline-first · messages remain local until transport is integrated", style = MaterialTheme.typography.bodySmall)
+                    Text("LXMF · encrypted local outbox · route-aware delivery", style = MaterialTheme.typography.bodySmall)
                 }
             }
             item {
@@ -812,8 +812,9 @@ private fun ChatScreen(
             Column(modifier = Modifier.weight(1f).padding(start = 4.dp)) {
                 Text(conversation.title, style = MaterialTheme.typography.titleLarge, maxLines = 1)
                 Text(
-                    conversation.recipientAddress?.let { "LXMF destination · unverified" }
-                        ?: "Private local conversation",
+                    conversation.recipientAddress?.let {
+                        if (conversation.recipientVerified) "Verified LXMF contact" else "LXMF destination · not verified"
+                    } ?: "Private local conversation",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
