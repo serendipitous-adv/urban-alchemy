@@ -7,8 +7,6 @@ plugins {
 
 val releaseStoreFile = System.getenv("ANDROID_KEYSTORE_PATH")
 val releaseStorePassword = System.getenv("ANDROID_KEYSTORE_PASSWORD")
-val releaseKeyAlias = System.getenv("ANDROID_KEY_ALIAS")
-val releaseKeyPassword = System.getenv("ANDROID_KEY_PASSWORD")
 
 android {
     namespace = "org.urbanalchemy.messenger"
@@ -33,8 +31,8 @@ android {
                 storeFile = file(releaseStoreFile)
                 storeType = "pkcs12"
                 storePassword = releaseStorePassword
-                keyAlias = releaseKeyAlias
-                keyPassword = releaseKeyPassword
+                keyAlias = "urban-alchemy"
+                keyPassword = releaseStorePassword
             }
         }
     }
