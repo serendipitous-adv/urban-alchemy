@@ -45,6 +45,7 @@ import java.text.DateFormat
 import java.util.Date
 
 class MainActivity : ComponentActivity() {
+    private var sharedInvite by mutableStateOf<String?>(null)
     companion object {
         // Static for the lifetime of this Android process: Activity recreation must
         // not turn active messages into uncertain ones a second time.
@@ -178,6 +179,14 @@ class MainActivity : ComponentActivity() {
         processed
     }
 
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        if (intent.action == Intent.ACTION_SEND && intent.type == "text/plain") {
+            sharedInvite = intent.getStringExtra(Intent.EXTRA_TEXT)?.takeIf { it.isNotBlank() }
+        }
+    }
+
     override fun onDestroy() {
         try {
             reticulumMulticastLock?.let { if (it.isHeld) it.release() }
@@ -188,6 +197,9 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        sharedInvite = if (intent.action == Intent.ACTION_SEND && intent.type == "text/plain") {
+            intent.getStringExtra(Intent.EXTRA_TEXT)?.takeIf { it.isNotBlank() }
+        } else null
         val store = LocalStore(this)
         synchronized(MainActivity::class.java) {
             if (!processRecoveryCompleted) {
@@ -202,12 +214,18 @@ class MainActivity : ComponentActivity() {
             var contacts by remember { mutableStateOf(store.listContacts()) }
             var selectedId by remember { mutableStateOf<Long?>(null) }
             var messages by remember { mutableStateOf(emptyList<LocalMessage>()) }
-            var showContacts by remember { mutableStateOf(false) }
+            var showContacts by remember { mutableStateOf(sharedInvite != null) }
             var runtimeStatus by remember { mutableStateOf("Not checked") }
             var transportStatus by remember { mutableStateOf("Not started") }
             var lxmfAddress by remember { mutableStateOf<String?>(null) }
             var transportStarted by remember { mutableStateOf(false) }
             var isRefreshing by remember { mutableStateOf(false) }
+            LaunchedEffect(sharedInvite) {
+                if (sharedInvite != null) {
+                    selectedId = null
+                    showContacts = true
+                }
+            }
 
             MaterialTheme {
                 Surface(modifier = Modifier.fillMaxSize()) {
@@ -243,6 +261,7 @@ class MainActivity : ComponentActivity() {
                         )
                         showContacts -> ContactsScreen(
                             contacts = contacts,
+                            incomingInvite = sharedInvite,
                             onShareInvite = {
                                 try {
                                     acquireReticulumMulticastLock()
@@ -263,6 +282,9 @@ class MainActivity : ComponentActivity() {
                                                     runtimeInfo.getString("reticulum_public_key"),
                                                     runtimeInfo.getString("destination")
                                                 )
+                                                // Sharing an invite is the user's explicit signal to make
+                                                // this LXMF destination discoverable to the recipient.
+                                                module.callAttr("announce")
                                                 module.callAttr(
                                                     "create_contact_invite",
                                                     "Urban Alchemy",
@@ -276,7 +298,7 @@ class MainActivity : ComponentActivity() {
                                                 putExtra(Intent.EXTRA_TEXT, invite)
                                             }
                                             startActivity(Intent.createChooser(sendIntent, "Share your Urban Alchemy contact invite"))
-                                            transportStatus = "Your public LXMF contact invite is ready to share."
+                                            transportStatus = "Your LXMF address was announced and the public contact invite is ready to share."
                                         } catch (error: Exception) {
                                             transportStatus = "Could not create invite: ${error.message ?: error.javaClass.simpleName}"
                                         }
@@ -285,7 +307,7 @@ class MainActivity : ComponentActivity() {
                                     transportStatus = "Could not prepare Reticulum: ${error.message ?: error.javaClass.simpleName}"
                                 }
                             },
-                            onBack = { showContacts = false },
+                            onBack = { showContacts = false; sharedInvite = null },
                             onValidateInvite = { rawInvite, complete ->
                                 lifecycleScope.launch {
                                     try {
@@ -668,6 +690,7 @@ private fun MessengerHome(
 @Composable
 private fun ContactsScreen(
     contacts: List<Contact>,
+    incomingInvite: String?,
     onShareInvite: () -> Unit,
     onBack: () -> Unit,
     onValidateInvite: (String, (String?, String?) -> Unit) -> Unit,
@@ -677,10 +700,11 @@ private fun ContactsScreen(
 ) {
     var name by remember { mutableStateOf("") }
     var address by remember { mutableStateOf("") }
-    var inviteText by remember { mutableStateOf("") }
+    var inviteText by remember(incomingInvite) { mutableStateOf(incomingInvite.orEmpty()) }
     var validatedInvite by remember { mutableStateOf<String?>(null) }
     var validating by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
+    var showManualAddress by remember { mutableStateOf(false) }
 
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
@@ -703,7 +727,7 @@ private fun ContactsScreen(
                 ) {
                     Text("Add from invite", style = MaterialTheme.typography.titleMedium)
                     Text(
-                        "Paste the contact invite someone shared with you. The public key and LXMF address are checked before saving.",
+                        "Choose Urban Alchemy Messenger from another app's Share menu to open an invite here automatically, or paste one below. The public key and LXMF address are checked before saving.",
                         style = MaterialTheme.typography.bodySmall
                     )
                     OutlinedTextField(
@@ -730,8 +754,9 @@ private fun ContactsScreen(
                     ) { Text(if (validating) "Checking invite..." else "Verify invite") }
                     if (validatedInvite != null) {
                         val verified = JSONObject(validatedInvite!!)
-                        Text("Verified contact", style = MaterialTheme.typography.titleSmall)
+                        Text("Identity and address match", style = MaterialTheme.typography.titleSmall)
                         Text(verified.getString("display_name"), style = MaterialTheme.typography.titleMedium)
+                        Text("The public key matches this LXMF address. The display name is self-reported, not proof of a real-world identity.", style = MaterialTheme.typography.bodySmall)
                         Text("LXMF · ${verified.getString("lxmf_destination")}", style = MaterialTheme.typography.bodySmall)
                         Button(
                             onClick = {
@@ -759,41 +784,58 @@ private fun ContactsScreen(
                     modifier = Modifier.fillMaxWidth().padding(14.dp),
                     verticalArrangement = Arrangement.spacedBy(9.dp)
                 ) {
-                    Text("Add contact", style = MaterialTheme.typography.titleMedium)
+                    Text("Your contact invite", style = MaterialTheme.typography.titleMedium)
+                    Text(
+                        "Let people add you using the invite above. For a normal contact exchange, ask them to share theirs and paste it into “Add from invite”.",
+                        style = MaterialTheme.typography.bodySmall
+                    )
                     Button(onClick = onShareInvite, modifier = Modifier.fillMaxWidth()) {
                         Text("Share my contact invite")
                     }
-                    OutlinedTextField(
-                        value = name,
-                        onValueChange = { name = it; error = null },
-                        label = { Text("Contact name") },
-                        modifier = Modifier.fillMaxWidth(),
-                        singleLine = true
-                    )
-                    OutlinedTextField(
-                        value = address,
-                        onValueChange = { address = it; error = null },
-                        label = { Text("LXMF address · 32 hex characters") },
-                        modifier = Modifier.fillMaxWidth(),
-                        singleLine = true
-                    )
+                    TextButton(
+                        onClick = { showManualAddress = !showManualAddress },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(if (showManualAddress) "Hide manual address entry" else "Add by LXMF address instead · advanced")
+                    }
+                    if (showManualAddress) {
+                        Text(
+                            "This saves an unverified address only. It does not verify who controls it.",
+                            style = MaterialTheme.typography.bodySmall
+                        )
+                        OutlinedTextField(
+                            value = name,
+                            onValueChange = { name = it; error = null },
+                            label = { Text("Contact name") },
+                            modifier = Modifier.fillMaxWidth(),
+                            singleLine = true
+                        )
+                        OutlinedTextField(
+                            value = address,
+                            onValueChange = { address = it; error = null },
+                            label = { Text("LXMF address · 32 hex characters") },
+                            modifier = Modifier.fillMaxWidth(),
+                            singleLine = true
+                        )
+                        Button(
+                            onClick = {
+                                try {
+                                    onAddContact(name, address)
+                                    name = ""
+                                    address = ""
+                                    error = null
+                                    showManualAddress = false
+                                } catch (exception: Exception) {
+                                    error = exception.message ?: "Could not add contact."
+                                }
+                            },
+                            enabled = name.isNotBlank() && address.isNotBlank(),
+                            modifier = Modifier.fillMaxWidth()
+                        ) { Text("Save unverified address") }
+                    }
                     if (error != null) {
                         Text(error!!, color = MaterialTheme.colorScheme.error)
                     }
-                    Button(
-                        onClick = {
-                            try {
-                                onAddContact(name, address)
-                                name = ""
-                                address = ""
-                                error = null
-                            } catch (exception: Exception) {
-                                error = exception.message ?: "Could not add contact."
-                            }
-                        },
-                        enabled = name.isNotBlank() && address.isNotBlank(),
-                        modifier = Modifier.fillMaxWidth()
-                    ) { Text("Save contact") }
                 }
             }
         }
@@ -812,7 +854,7 @@ private fun ContactsScreen(
                         Text(contact.name, style = MaterialTheme.typography.titleMedium)
                         Text(contact.destination, style = MaterialTheme.typography.bodySmall)
                         Text(
-                            if (contact.verified) "Verified Reticulum identity" else "Unverified · address saved locally",
+                            if (contact.verified) "Key/address binding checked · display name self-reported" else "Unverified · address saved locally",
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
