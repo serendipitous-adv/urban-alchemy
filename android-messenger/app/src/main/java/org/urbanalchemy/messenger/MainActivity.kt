@@ -45,6 +45,7 @@ import java.text.DateFormat
 import java.util.Date
 
 class MainActivity : ComponentActivity() {
+    private var sharedInvite by mutableStateOf<String?>(null)
     companion object {
         // Static for the lifetime of this Android process: Activity recreation must
         // not turn active messages into uncertain ones a second time.
@@ -178,6 +179,14 @@ class MainActivity : ComponentActivity() {
         processed
     }
 
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        if (intent.action == Intent.ACTION_SEND && intent.type == "text/plain") {
+            sharedInvite = intent.getStringExtra(Intent.EXTRA_TEXT)?.takeIf { it.isNotBlank() }
+        }
+    }
+
     override fun onDestroy() {
         try {
             reticulumMulticastLock?.let { if (it.isHeld) it.release() }
@@ -188,6 +197,9 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        sharedInvite = if (intent.action == Intent.ACTION_SEND && intent.type == "text/plain") {
+            intent.getStringExtra(Intent.EXTRA_TEXT)?.takeIf { it.isNotBlank() }
+        } else null
         val store = LocalStore(this)
         synchronized(MainActivity::class.java) {
             if (!processRecoveryCompleted) {
@@ -202,7 +214,7 @@ class MainActivity : ComponentActivity() {
             var contacts by remember { mutableStateOf(store.listContacts()) }
             var selectedId by remember { mutableStateOf<Long?>(null) }
             var messages by remember { mutableStateOf(emptyList<LocalMessage>()) }
-            var showContacts by remember { mutableStateOf(false) }
+            var showContacts by remember { mutableStateOf(sharedInvite != null) }
             var runtimeStatus by remember { mutableStateOf("Not checked") }
             var transportStatus by remember { mutableStateOf("Not started") }
             var lxmfAddress by remember { mutableStateOf<String?>(null) }
@@ -243,6 +255,7 @@ class MainActivity : ComponentActivity() {
                         )
                         showContacts -> ContactsScreen(
                             contacts = contacts,
+                            incomingInvite = sharedInvite,
                             onShareInvite = {
                                 try {
                                     acquireReticulumMulticastLock()
@@ -285,7 +298,7 @@ class MainActivity : ComponentActivity() {
                                     transportStatus = "Could not prepare Reticulum: ${error.message ?: error.javaClass.simpleName}"
                                 }
                             },
-                            onBack = { showContacts = false },
+                            onBack = { showContacts = false; sharedInvite = null },
                             onValidateInvite = { rawInvite, complete ->
                                 lifecycleScope.launch {
                                     try {
@@ -668,6 +681,7 @@ private fun MessengerHome(
 @Composable
 private fun ContactsScreen(
     contacts: List<Contact>,
+    incomingInvite: String?,
     onShareInvite: () -> Unit,
     onBack: () -> Unit,
     onValidateInvite: (String, (String?, String?) -> Unit) -> Unit,
@@ -677,7 +691,7 @@ private fun ContactsScreen(
 ) {
     var name by remember { mutableStateOf("") }
     var address by remember { mutableStateOf("") }
-    var inviteText by remember { mutableStateOf("") }
+    var inviteText by remember(incomingInvite) { mutableStateOf(incomingInvite.orEmpty()) }
     var validatedInvite by remember { mutableStateOf<String?>(null) }
     var validating by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
