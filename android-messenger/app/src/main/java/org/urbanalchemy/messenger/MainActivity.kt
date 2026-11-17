@@ -681,6 +681,7 @@ private fun ContactsScreen(
     var validatedInvite by remember { mutableStateOf<String?>(null) }
     var validating by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
+    var showManualAddress by remember { mutableStateOf(false) }
 
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
@@ -730,8 +731,9 @@ private fun ContactsScreen(
                     ) { Text(if (validating) "Checking invite..." else "Verify invite") }
                     if (validatedInvite != null) {
                         val verified = JSONObject(validatedInvite!!)
-                        Text("Verified contact", style = MaterialTheme.typography.titleSmall)
+                        Text("Identity and address match", style = MaterialTheme.typography.titleSmall)
                         Text(verified.getString("display_name"), style = MaterialTheme.typography.titleMedium)
+                        Text("The public key matches this LXMF address. The display name is self-reported, not proof of a real-world identity.", style = MaterialTheme.typography.bodySmall)
                         Text("LXMF · ${verified.getString("lxmf_destination")}", style = MaterialTheme.typography.bodySmall)
                         Button(
                             onClick = {
@@ -759,41 +761,58 @@ private fun ContactsScreen(
                     modifier = Modifier.fillMaxWidth().padding(14.dp),
                     verticalArrangement = Arrangement.spacedBy(9.dp)
                 ) {
-                    Text("Add contact", style = MaterialTheme.typography.titleMedium)
+                    Text("Your contact invite", style = MaterialTheme.typography.titleMedium)
+                    Text(
+                        "Let people add you using the invite above. For a normal contact exchange, ask them to share theirs and paste it into “Add from invite”.",
+                        style = MaterialTheme.typography.bodySmall
+                    )
                     Button(onClick = onShareInvite, modifier = Modifier.fillMaxWidth()) {
                         Text("Share my contact invite")
                     }
-                    OutlinedTextField(
-                        value = name,
-                        onValueChange = { name = it; error = null },
-                        label = { Text("Contact name") },
-                        modifier = Modifier.fillMaxWidth(),
-                        singleLine = true
-                    )
-                    OutlinedTextField(
-                        value = address,
-                        onValueChange = { address = it; error = null },
-                        label = { Text("LXMF address · 32 hex characters") },
-                        modifier = Modifier.fillMaxWidth(),
-                        singleLine = true
-                    )
+                    TextButton(
+                        onClick = { showManualAddress = !showManualAddress },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(if (showManualAddress) "Hide manual address entry" else "Add by LXMF address instead · advanced")
+                    }
+                    if (showManualAddress) {
+                        Text(
+                            "This saves an unverified address only. It does not verify who controls it.",
+                            style = MaterialTheme.typography.bodySmall
+                        )
+                        OutlinedTextField(
+                            value = name,
+                            onValueChange = { name = it; error = null },
+                            label = { Text("Contact name") },
+                            modifier = Modifier.fillMaxWidth(),
+                            singleLine = true
+                        )
+                        OutlinedTextField(
+                            value = address,
+                            onValueChange = { address = it; error = null },
+                            label = { Text("LXMF address · 32 hex characters") },
+                            modifier = Modifier.fillMaxWidth(),
+                            singleLine = true
+                        )
+                        Button(
+                            onClick = {
+                                try {
+                                    onAddContact(name, address)
+                                    name = ""
+                                    address = ""
+                                    error = null
+                                    showManualAddress = false
+                                } catch (exception: Exception) {
+                                    error = exception.message ?: "Could not add contact."
+                                }
+                            },
+                            enabled = name.isNotBlank() && address.isNotBlank(),
+                            modifier = Modifier.fillMaxWidth()
+                        ) { Text("Save unverified address") }
+                    }
                     if (error != null) {
                         Text(error!!, color = MaterialTheme.colorScheme.error)
                     }
-                    Button(
-                        onClick = {
-                            try {
-                                onAddContact(name, address)
-                                name = ""
-                                address = ""
-                                error = null
-                            } catch (exception: Exception) {
-                                error = exception.message ?: "Could not add contact."
-                            }
-                        },
-                        enabled = name.isNotBlank() && address.isNotBlank(),
-                        modifier = Modifier.fillMaxWidth()
-                    ) { Text("Save contact") }
                 }
             }
         }
@@ -812,7 +831,7 @@ private fun ContactsScreen(
                         Text(contact.name, style = MaterialTheme.typography.titleMedium)
                         Text(contact.destination, style = MaterialTheme.typography.bodySmall)
                         Text(
-                            if (contact.verified) "Verified Reticulum identity" else "Unverified · address saved locally",
+                            if (contact.verified) "Key/address binding checked · display name self-reported" else "Unverified · address saved locally",
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
