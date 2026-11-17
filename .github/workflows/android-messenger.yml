@@ -27,6 +27,8 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
+      - name: Run LXMF bridge unit tests
+        run: python -m unittest discover -s tests -v
       - uses: android-actions/setup-android@v3
         with:
           packages: platform-tools
