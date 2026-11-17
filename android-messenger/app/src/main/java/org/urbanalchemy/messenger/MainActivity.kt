@@ -220,6 +220,12 @@ class MainActivity : ComponentActivity() {
             var lxmfAddress by remember { mutableStateOf<String?>(null) }
             var transportStarted by remember { mutableStateOf(false) }
             var isRefreshing by remember { mutableStateOf(false) }
+            LaunchedEffect(sharedInvite) {
+                if (sharedInvite != null) {
+                    selectedId = null
+                    showContacts = true
+                }
+            }
 
             MaterialTheme {
                 Surface(modifier = Modifier.fillMaxSize()) {
