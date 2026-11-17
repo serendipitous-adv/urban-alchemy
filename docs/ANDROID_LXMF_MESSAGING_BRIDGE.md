@@ -2,81 +2,69 @@
 
 ## Status
 
-This branch adds the first Android-packaged Python bridge for native LXMF
-message submission and inbound delivery callbacks. It is built against the
-exact Reticulum and LXMF forks already pinned in
-`app/src/main/python/requirements.txt`.
+The Android app packages a Python bridge for native LXMF message submission and inbound delivery callbacks. It uses the Reticulum and LXMF forks pinned in `app/src/main/python/requirements.txt`.
 
-The bridge is attached to the existing persistent `LXMRouter` during
-`transport_probe.start_runtime()`. It uses LXMF's own `LXMessage`,
-`LXMRouter.handle_outbound()`, and `register_delivery_callback()`; it does
-not send LXMF payloads through the Wi-Fi Direct socket protocol.
+The bridge attaches to the persistent `LXMRouter` during `transport_probe.start_runtime()`. It uses LXMF's own `LXMessage`, `LXMRouter.handle_outbound()`, and `register_delivery_callback()`; it does not send LXMF payloads through the retired Wi-Fi Direct prototype.
 
-## Python entry points exposed through Chaquopy
+## Android integration
 
-- `transport_probe.start_runtime(storage_path, display_name)`: starts the
-  persistent RNS/LXMF runtime and registers the inbound callback.
-- `transport_probe.send_message(destination_hex, text, client_message_id)`:
-  submits an opportunistic LXMF message when a destination route and identity
-  are already known. If route discovery is needed, it requests a path and
-  returns `WAITING_FOR_ROUTE` without blocking the Android UI.
-- `transport_probe.drain_events(limit)`: drains inbound message events and
-  outbound delivery-state callbacks for Kotlin to persist.
+The Kotlin host:
 
-Inbound event fields include LXMF message hash, source/destination hashes,
-title, content, timestamp, signature-validation state and transport-encryption
-metadata. Outbound events include the stable local message ID, LXMF hash,
-LXMF state and progress.
+- Stores outbound message bodies encrypted in `LocalStore` before submission.
+- Persists `SUBMITTING` before crossing into the Python/LXMF bridge.
+- Submits messages through `transport_probe.send_message` and leaves route/identity waits eligible for later retry.
+- Polls `peek_events` on an IO dispatcher, persists valid inbound messages, and acknowledges the event prefix only after processing.
+- Requires inbound LXMF signature validation and a destination matching the local delivery identity before persistence.
+- Deduplicates inbound messages by LXMF message hash and reuses a contact conversation or stable unknown-sender request thread.
+- Maps LXMF callbacks to honest local delivery states.
+- Converts interrupted `SUBMITTING`, `SUBMITTED`, and `SENT` messages to `DELIVERY_UNKNOWN` on the next Android process start; it does not automatically resend them.
 
-## Current Android integration
+The bridge event queue and LXMF callback objects are process-local. The Android host currently polls while the app process is active; durable background delivery after the app is closed is not qualified.
 
-The Android host already has a first-pass integration: it stores outgoing
-messages encrypted in `LocalStore`, submits queued messages through
-`transport_probe.send_message`, polls `peek_events` on a worker coroutine,
-persists inbound messages by LXMF hash, and acknowledges bridge events after
-processing the batch. It retries messages waiting for a route while the app is
-active.
+## Python entry points
 
-This is not yet a qualified live-messaging MVP. The receive path must accept
-only events whose LXMF signature is validated and whose destination matches
-the local delivery identity. Route recovery, event-queue behavior across
-process death, concurrent database writes, and physical two-device delivery
-still require verification.
+- `transport_probe.start_runtime(storage_path, display_name)`: starts the persistent Reticulum/LXMF runtime and registers inbound callbacks.
+- `transport_probe.send_message(destination_hex, text, client_message_id)`: delegates to the LXMF bridge. The bridge requests a route and returns `WAITING_FOR_ROUTE` when no path is known; it does not block waiting for discovery.
+- `transport_probe.peek_events(limit)`: reads pending callback events without removing them.
+- `transport_probe.ack_events(count)`: removes the processed event prefix after Android persistence.
+- `transport_probe.validate_contact_invite(invite_json)`: validates the public key against the Reticulum identity hash and LXMF destination.
+- `transport_probe.create_contact_invite(display_name, player_id)`: exports public contact data only; it never exports private keys.
+- `transport_probe.announce()`: submits an LXMF announce. This is not proof of peer receipt.
 
-The bridge uses opportunistic LXMF delivery. It does not claim router
-acceptance means recipient delivery. The UI must distinguish at least:
-`QUEUED`, `WAITING_FOR_ROUTE`, `SUBMITTED_TO_LXMF`, `SENT`,
-`DELIVERED`, `FAILED`, and `REJECTED`. Only LXMF's delivery callback
-should produce `DELIVERED`; announce submission and local queueing are not
-delivery proofs.
+## Delivery semantics
 
-Peer authentication and UA Player/Node binding remain a separate identity
-layer. LXMF's cryptographic destination and message signature must be
-validated and displayed distinctly from a user's optional Player persona.
-Do not treat a raw typed destination as a verified human identity.
+The UI and storage must distinguish:
+
+- `QUEUED`: encrypted and saved locally; not yet submitted.
+- `WAITING_FOR_ROUTE`: no usable path is currently known.
+- `WAITING_FOR_IDENTITY`: recipient identity material is not yet available.
+- `SUBMITTING`: the app has persisted the ambiguous handoff boundary and is calling LXMF.
+- `SUBMITTED`: LXMF accepted the outbound message; this is not recipient delivery.
+- `SENT`: LXMF reports transmission; this is not recipient delivery proof.
+- `DELIVERED`: LXMF reported a delivery proof.
+- `FAILED` / `REJECTED`: LXMF reported failure or rejection.
+- `DELIVERY_UNKNOWN`: the process lost the callback or crashed around submission; the app cannot determine whether the recipient received it. The message is retained and not automatically resent.
+
+The app must never convert local queueing, an announce, or router acceptance into a claim of delivery.
+
+## Contact identity
+
+A validated invite establishes that its Reticulum public key matches the supplied Reticulum identity hash and LXMF destination. It does not establish that a self-reported display name belongs to a real-world person. Raw manually entered destinations remain unverified.
+
+The Reticulum/LXMF identity is separate from the local Android device-signing key and from the UA Player/Node identifiers. Do not conflate transport identity with human identity.
 
 ## Acceptance work still required
 
-1. Add Kotlin Chaquopy calls on an IO dispatcher for send and event polling.
-2. Persist inbound events transactionally in `LocalStore`, deduplicating by
-   LXMF message hash.
-3. Persist the local client message ID to LXMF hash mapping and update statuses
-   from LXMF callbacks.
-4. Keep route-unavailable messages queued and retry without blocking the UI.
-5. Add runtime lifecycle/restart handling; never start a second Reticulum
-   instance in the same process.
-6. Add tests for invalid destination, no route, send callback, inbound callback,
-   duplicate inbound hash, process restart, and two-device delivery.
-7. Run the Android debug build and inspect device logs before publishing an APK.
+1. Two physical Android devices: bidirectional invite exchange and message delivery over a reachable Reticulum path.
+2. Negative invite tests: malformed JSON, wrong version, altered public key, mismatched identity hash, and mismatched LXMF destination.
+3. Transport tests: no route, route recovery, unknown recipient identity, successful submission, delivery proof, rejection, and failure callback.
+4. Inbound tests: invalid signature, wrong destination, duplicate hash, known contact, and unknown-sender request.
+5. Process-restart tests at each outbound state, especially immediately before and after `handle_outbound()`.
+6. Concurrent callback/database tests and verification that an unpersisted event is not acknowledged.
+7. Upgrade tests preserving the installed preview's database, Reticulum identity, Android Keystore key, contacts, and history.
+
+The current GitHub Actions job assembles the debug APK; it does not execute these transport or physical-device acceptance tests.
 
 ## Safety and compatibility
 
-No existing preview installation, app-private database, Reticulum identity or
-signing key is modified by this branch. Do not uninstall the installed preview
-to test it. Release signing and the first stable-install data migration remain
-separate blockers.
-
-
-### Process-restart delivery recovery
-
-Outbound messages are persisted before LXMF submission. A submitted message is not automatically resent after an Android process restart: the Python bridge's LXMF callback objects are process-local, and a lost callback does not prove that the peer failed to receive the message. On the first database open in each Android process, records left in `SUBMITTED` or `SENT` are changed to `DELIVERY_UNKNOWN`. The original encrypted message remains in history and is excluded from the automatic outbox retry query. The UI must describe this as uncertain, never as delivered. Manual reconciliation/retry requires a separate explicit user action and should warn about possible duplicates.
+Do not uninstall an existing preview installation, clear app data, or replace the persistent Reticulum identity during testing. Release signing, background delivery, multi-device delegation/recovery, and the first stable-install migration remain separate blockers.
