@@ -492,9 +492,10 @@ private fun MessengerHome(
     onCreateConversation: (String) -> Unit,
     onContacts: () -> Unit
 ) {
-    var newName by remember { mutableStateOf("") }
-    var showIdentityDetails by remember { mutableStateOf(false) }
-    var showTransportDetails by remember { mutableStateOf(false) }
+    var showSettings by remember { mutableStateOf(false) }
+    val messageThreads = conversations.filter {
+        it.recipientAddress != null || it.title.startsWith("Message request ·")
+    }
 
     PullToRefreshBox(
         isRefreshing = isRefreshing,
@@ -503,186 +504,180 @@ private fun MessengerHome(
     ) {
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
-            contentPadding = androidx.compose.foundation.layout.PaddingValues(16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
+            contentPadding = androidx.compose.foundation.layout.PaddingValues(
+                start = 20.dp, top = 22.dp, end = 20.dp, bottom = 28.dp
+            ),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             item {
-                Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                    Text("Urban Alchemy", style = MaterialTheme.typography.headlineMedium)
-                    Text("Messenger", style = MaterialTheme.typography.titleMedium)
-                    Text("LXMF · encrypted local outbox · route-aware delivery", style = MaterialTheme.typography.bodySmall)
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                        Text("Urban Alchemy", style = MaterialTheme.typography.headlineSmall)
+                        Text("Messages", style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                    TextButton(onClick = { showSettings = !showSettings }) {
+                        Text(if (showSettings) "Close" else "Settings")
+                    }
+                }
+            }
+            item {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = androidx.compose.foundation.shape.RoundedCornerShape(22.dp),
+                    colors = androidx.compose.material3.CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.surfaceVariant
+                    )
+                ) {
+                    Column(
+                        modifier = Modifier.padding(18.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        Text(
+                            if (messageThreads.isEmpty()) "A little world starts with a conversation."
+                            else "Your conversations",
+                            style = MaterialTheme.typography.titleLarge
+                        )
+                        Text(
+                            if (messageThreads.isEmpty())
+                                "Add someone you know. Your messages stay on this device until a connection is available."
+                            else "Talk directly. No public directory, account, or central feed required.",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Button(onClick = onContacts, modifier = Modifier.fillMaxWidth()) {
+                            Text("＋  Add a contact")
+                        }
+                    }
                 }
             }
             item {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = androidx.compose.ui.Alignment.CenterVertically
+                    verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
                 ) {
                     Text("Conversations", style = MaterialTheme.typography.titleLarge)
-                    TextButton(onClick = onContacts) { Text("Contacts · $contactCount") }
+                    Text("$contactCount contacts", style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
-            if (conversations.isEmpty()) {
+            if (messageThreads.isEmpty()) {
                 item {
-                    Card(modifier = Modifier.fillMaxWidth()) {
+                    Column(
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 24.dp),
+                        horizontalAlignment = androidx.compose.ui.Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Text("✳", style = MaterialTheme.typography.displaySmall,
+                            color = MaterialTheme.colorScheme.primary)
+                        Text("No conversations yet", style = MaterialTheme.typography.titleMedium)
                         Text(
-                            "No conversations yet. Start with a contact, or create a private local notes thread.",
-                            modifier = Modifier.padding(16.dp),
-                            style = MaterialTheme.typography.bodyMedium
+                            "When you add someone, your conversation will appear here.",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
                 }
             } else {
-                items(conversations, key = { it.id }) { conversation ->
-                    Card(modifier = Modifier.fillMaxWidth()) {
+                items(messageThreads, key = { it.id }) { conversation ->
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = androidx.compose.foundation.shape.RoundedCornerShape(18.dp)
+                    ) {
                         TextButton(
                             onClick = { onOpen(conversation.id) },
                             modifier = Modifier.fillMaxWidth()
                         ) {
                             Column(
-                                modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 5.dp),
-                                verticalArrangement = Arrangement.spacedBy(3.dp)
+                                modifier = Modifier.fillMaxWidth().padding(10.dp),
+                                verticalArrangement = Arrangement.spacedBy(5.dp)
                             ) {
-                                Text(conversation.title, style = MaterialTheme.typography.titleMedium)
-                                Text(conversation.preview, style = MaterialTheme.typography.bodySmall, maxLines = 2)
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    Text(conversation.title, style = MaterialTheme.typography.titleMedium,
+                                        color = MaterialTheme.colorScheme.onSurface)
+                                    Text(
+                                        if (conversation.recipientVerified) "Contact checked" else "Saved contact",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.primary
+                                    )
+                                }
                                 Text(
-                                    if (conversation.recipientAddress != null) "LXMF · address saved, unverified"
-                                    else "Private local thread · stays on this device",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    conversation.preview.ifBlank { "Start a conversation" },
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    maxLines = 2
                                 )
                             }
                         }
                     }
                 }
             }
-            item {
-                Card(modifier = Modifier.fillMaxWidth()) {
-                    Column(
-                        modifier = Modifier.fillMaxWidth().padding(14.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
+            if (showSettings) {
+                item {
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = androidx.compose.foundation.shape.RoundedCornerShape(18.dp)
                     ) {
-                        OutlinedTextField(
-                            value = newName,
-                            onValueChange = { newName = it },
-                            label = { Text("New local conversation") },
-                            placeholder = { Text("Give it a name") },
-                            modifier = Modifier.fillMaxWidth(),
-                            singleLine = true
-                        )
-                        Button(
-                            onClick = {
-                                val title = newName.trim()
-                                if (title.isNotEmpty()) {
-                                    onCreateConversation(title)
-                                    newName = ""
-                                }
-                            },
-                            enabled = newName.isNotBlank(),
-                            modifier = Modifier.fillMaxWidth()
-                        ) { Text("Create private thread") }
-                    }
-                }
-            }
-            item {
-                Card(modifier = Modifier.fillMaxWidth()) {
-                    Column(
-                        modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 8.dp)
-                    ) {
-                        TextButton(
-                            onClick = { showTransportDetails = !showTransportDetails },
-                            modifier = Modifier.fillMaxWidth()
+                        Column(
+                            modifier = Modifier.padding(16.dp),
+                            verticalArrangement = Arrangement.spacedBy(10.dp)
                         ) {
-                            Column(
-                                modifier = Modifier.fillMaxWidth(),
-                                verticalArrangement = Arrangement.spacedBy(3.dp)
-                            ) {
-                                Text(
-                                    if (showTransportDetails) "Hide connection details" else "Connection · Reticulum / LXMF",
-                                    style = MaterialTheme.typography.titleMedium
-                                )
-                                Text(
-                                    if (transportStarted) "Active locally · no peer confirmed"
-                                    else "Not started · messages remain local",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            }
-                        }
-                        if (showTransportDetails) {
-                            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                                Text(transportStatus, style = MaterialTheme.typography.bodySmall)
-                                if (lxmfAddress != null) {
-                                    Text("Your LXMF address", style = MaterialTheme.typography.labelMedium)
-                                    Text(lxmfAddress, style = MaterialTheme.typography.bodySmall)
-                                    TextButton(onClick = onCopyAddress) { Text("Copy address") }
-                                }
-                                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                    Button(onClick = onStartTransport, enabled = !transportStarted) {
-                                        Text("Start transport")
-                                    }
-                                    TextButton(onClick = onAnnounce, enabled = transportStarted) {
-                                        Text("Announce")
-                                    }
-                                }
-                                Text(
-                                    "Start loads your saved identity. Announce advertises your address; neither sends a message.",
-                                    style = MaterialTheme.typography.bodySmall
-                                )
-                                androidx.compose.material3.HorizontalDivider()
-                                Text("Diagnostics", style = MaterialTheme.typography.titleSmall)
-                                Text(runtimeStatus, style = MaterialTheme.typography.bodySmall)
-                                TextButton(onClick = onCheckRuntime) { Text("Check embedded runtime") }
-                                Text(
-                                    "Import check only. It does not connect, announce, or send messages.",
-                                    style = MaterialTheme.typography.bodySmall
-                                )
-                            }
-                        }
-                    }
-                }
-            }
-            item {
-                Card(modifier = Modifier.fillMaxWidth()) {
-                    Column(
-                        modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 8.dp)
-                    ) {
-                        TextButton(
-                            onClick = { showIdentityDetails = !showIdentityDetails },
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
+                            Text("Connection", style = MaterialTheme.typography.titleMedium)
                             Text(
-                                if (showIdentityDetails) "Hide identity details" else "Identity details",
-                                style = MaterialTheme.typography.titleMedium
+                                if (transportStarted) "Messenger runtime is active on this device."
+                                else "The messenger connects when you share your invite or start transport.",
+                                style = MaterialTheme.typography.bodyMedium
                             )
-                        }
-                        if (showIdentityDetails) {
-                            Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {
-                                Text("Player · ${playerId.take(8)}…", style = MaterialTheme.typography.bodyMedium)
-                                Text("This device · ${nodeId.take(8)}…", style = MaterialTheme.typography.bodyMedium)
-                                androidx.compose.material3.HorizontalDivider()
-                                Text("Android device-key fingerprint", style = MaterialTheme.typography.labelMedium)
-                                Text(fingerprint, style = MaterialTheme.typography.bodySmall)
-                                Text(
-                                    "Separate from your Reticulum/LXMF identity. Private keys stay on this device.",
-                                    style = MaterialTheme.typography.bodySmall
-                                )
+                            Text(transportStatus, style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Button(onClick = onStartTransport, enabled = !transportStarted) {
+                                    Text("Connect")
+                                }
+                                TextButton(onClick = onAnnounce, enabled = transportStarted) {
+                                    Text("Refresh presence")
+                                }
                             }
+                            if (lxmfAddress != null) {
+                                Text("Advanced network address", style = MaterialTheme.typography.labelMedium)
+                                Text(lxmfAddress, style = MaterialTheme.typography.bodySmall)
+                                TextButton(onClick = onCopyAddress) { Text("Copy address") }
+                            }
+                            androidx.compose.material3.HorizontalDivider()
+                            Text("Diagnostics", style = MaterialTheme.typography.titleSmall)
+                            Text(runtimeStatus, style = MaterialTheme.typography.bodySmall)
+                            TextButton(onClick = onCheckRuntime) { Text("Check app runtime") }
+                            androidx.compose.material3.HorizontalDivider()
+                            Text("This device", style = MaterialTheme.typography.titleSmall)
+                            Text("Player · ${playerId.take(8)}…", style = MaterialTheme.typography.bodySmall)
+                            Text("Device · ${nodeId.take(8)}…", style = MaterialTheme.typography.bodySmall)
+                            Text("Key fingerprint · ${fingerprint.take(16)}…",
+                                style = MaterialTheme.typography.bodySmall)
+                            Text(
+                                "Your private keys stay on this device. Network details are shown here only for troubleshooting.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
                         }
                     }
                 }
             }
             item {
                 Text(
-                    "Pull down to refresh your local conversations and contacts.",
-                    style = MaterialTheme.typography.bodySmall,
+                    "Private local notes are kept on this device and are not shown as conversations.",
+                    style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
-            // Keep a small scroll runway on short inboxes so swipe gestures
-            // remain discoverable even when the visible cards fit the screen.
-            item { Spacer(modifier = Modifier.padding(bottom = 112.dp)) }
         }
     }
 }
@@ -708,35 +703,64 @@ private fun ContactsScreen(
 
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
-        contentPadding = androidx.compose.foundation.layout.PaddingValues(16.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
+        contentPadding = androidx.compose.foundation.layout.PaddingValues(20.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
         item {
-            TextButton(onClick = onBack) { Text("‹ Conversations") }
-            Text("Contacts", style = MaterialTheme.typography.headlineMedium)
+            TextButton(onClick = onBack) { Text("‹  Messages") }
+            Text("People", style = MaterialTheme.typography.headlineMedium)
             Text(
-                "Add people to your address book. Share your invite so others can add you.",
-                style = MaterialTheme.typography.bodySmall
+                "Your contacts are yours. Add someone by exchanging a private invite.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
         item {
-            Card(modifier = Modifier.fillMaxWidth()) {
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = androidx.compose.foundation.shape.RoundedCornerShape(22.dp),
+                colors = androidx.compose.material3.CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceVariant
+                )
+            ) {
                 Column(
-                    modifier = Modifier.fillMaxWidth().padding(14.dp),
-                    verticalArrangement = Arrangement.spacedBy(9.dp)
+                    modifier = Modifier.padding(18.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    Text("Add from invite", style = MaterialTheme.typography.titleMedium)
+                    Text("Share your invite", style = MaterialTheme.typography.titleLarge)
                     Text(
-                        "Choose Urban Alchemy Messenger from another app's Share menu to open an invite here automatically, or paste one below. The public key and LXMF address are checked before saving.",
-                        style = MaterialTheme.typography.bodySmall
+                        "Let someone add you. They can share their invite back with you to complete the exchange.",
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                    Button(onClick = onShareInvite, modifier = Modifier.fillMaxWidth()) {
+                        Text("Share my contact invite")
+                    }
+                }
+            }
+        }
+        item {
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = androidx.compose.foundation.shape.RoundedCornerShape(18.dp)
+            ) {
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Text("Add someone", style = MaterialTheme.typography.titleMedium)
+                    Text(
+                        "Paste an invite someone shared with you. The app checks that the public key and messaging address belong together.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     OutlinedTextField(
                         value = inviteText,
                         onValueChange = { inviteText = it; validatedInvite = null; error = null },
-                        label = { Text("Paste contact invite") },
+                        label = { Text("Contact invite") },
+                        placeholder = { Text("Paste invite here") },
                         modifier = Modifier.fillMaxWidth(),
-                        minLines = 3,
-                        maxLines = 6
+                        minLines = 2,
+                        maxLines = 5
                     )
                     Button(
                         onClick = {
@@ -751,13 +775,15 @@ private fun ContactsScreen(
                         },
                         enabled = inviteText.isNotBlank() && !validating,
                         modifier = Modifier.fillMaxWidth()
-                    ) { Text(if (validating) "Checking invite..." else "Verify invite") }
+                    ) { Text(if (validating) "Checking…" else "Check invite") }
                     if (validatedInvite != null) {
                         val verified = JSONObject(validatedInvite!!)
-                        Text("Identity and address match", style = MaterialTheme.typography.titleSmall)
                         Text(verified.getString("display_name"), style = MaterialTheme.typography.titleMedium)
-                        Text("The public key matches this LXMF address. The display name is self-reported, not proof of a real-world identity.", style = MaterialTheme.typography.bodySmall)
-                        Text("LXMF · ${verified.getString("lxmf_destination")}", style = MaterialTheme.typography.bodySmall)
+                        Text(
+                            "The key and messaging address match. The person's display name is self-reported.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
                         Button(
                             onClick = {
                                 try {
@@ -770,7 +796,7 @@ private fun ContactsScreen(
                                 }
                             },
                             modifier = Modifier.fillMaxWidth()
-                        ) { Text("Add verified contact") }
+                        ) { Text("Add contact") }
                     }
                     if (error != null) {
                         Text(error!!, color = MaterialTheme.colorScheme.error)
@@ -779,88 +805,80 @@ private fun ContactsScreen(
             }
         }
         item {
-            Card(modifier = Modifier.fillMaxWidth()) {
-                Column(
-                    modifier = Modifier.fillMaxWidth().padding(14.dp),
-                    verticalArrangement = Arrangement.spacedBy(9.dp)
-                ) {
-                    Text("Your contact invite", style = MaterialTheme.typography.titleMedium)
+            TextButton(onClick = { showManualAddress = !showManualAddress }) {
+                Text(if (showManualAddress) "Hide advanced options" else "Advanced: add by network address")
+            }
+            if (showManualAddress) {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text(
-                        "Let people add you using the invite above. For a normal contact exchange, ask them to share theirs and paste it into “Add from invite”.",
+                        "Only use this if you already know the person's LXMF address. It does not verify who controls it.",
                         style = MaterialTheme.typography.bodySmall
                     )
-                    Button(onClick = onShareInvite, modifier = Modifier.fillMaxWidth()) {
-                        Text("Share my contact invite")
-                    }
-                    TextButton(
-                        onClick = { showManualAddress = !showManualAddress },
+                    OutlinedTextField(
+                        value = name, onValueChange = { name = it; error = null },
+                        label = { Text("Contact name") }, modifier = Modifier.fillMaxWidth(), singleLine = true
+                    )
+                    OutlinedTextField(
+                        value = address, onValueChange = { address = it; error = null },
+                        label = { Text("Network address") }, modifier = Modifier.fillMaxWidth(), singleLine = true
+                    )
+                    Button(
+                        onClick = {
+                            try {
+                                onAddContact(name, address)
+                                name = ""; address = ""; error = null; showManualAddress = false
+                            } catch (exception: Exception) {
+                                error = exception.message ?: "Could not add contact."
+                            }
+                        },
+                        enabled = name.isNotBlank() && address.isNotBlank(),
                         modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Text(if (showManualAddress) "Hide manual address entry" else "Add by LXMF address instead · advanced")
-                    }
-                    if (showManualAddress) {
-                        Text(
-                            "This saves an unverified address only. It does not verify who controls it.",
-                            style = MaterialTheme.typography.bodySmall
-                        )
-                        OutlinedTextField(
-                            value = name,
-                            onValueChange = { name = it; error = null },
-                            label = { Text("Contact name") },
-                            modifier = Modifier.fillMaxWidth(),
-                            singleLine = true
-                        )
-                        OutlinedTextField(
-                            value = address,
-                            onValueChange = { address = it; error = null },
-                            label = { Text("LXMF address · 32 hex characters") },
-                            modifier = Modifier.fillMaxWidth(),
-                            singleLine = true
-                        )
-                        Button(
-                            onClick = {
-                                try {
-                                    onAddContact(name, address)
-                                    name = ""
-                                    address = ""
-                                    error = null
-                                    showManualAddress = false
-                                } catch (exception: Exception) {
-                                    error = exception.message ?: "Could not add contact."
-                                }
-                            },
-                            enabled = name.isNotBlank() && address.isNotBlank(),
-                            modifier = Modifier.fillMaxWidth()
-                        ) { Text("Save unverified address") }
-                    }
-                    if (error != null) {
-                        Text(error!!, color = MaterialTheme.colorScheme.error)
-                    }
+                    ) { Text("Save unverified contact") }
                 }
             }
+            if (error != null && validatedInvite == null) {
+                Text(error!!, color = MaterialTheme.colorScheme.error)
+            }
         }
-        item { Text("Saved contacts · ${contacts.size}", style = MaterialTheme.typography.titleLarge) }
+        item { Text("Your people · ${contacts.size}", style = MaterialTheme.typography.titleLarge) }
         if (contacts.isEmpty()) {
             item {
-                Text("No contacts yet.", style = MaterialTheme.typography.bodyMedium)
+                Text(
+                    "No contacts yet. When someone shares an invite, add them here.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
             }
         } else {
             items(contacts, key = { it.id }) { contact ->
-                Card(modifier = Modifier.fillMaxWidth()) {
-                    Column(
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = androidx.compose.foundation.shape.RoundedCornerShape(16.dp)
+                ) {
+                    Row(
                         modifier = Modifier.fillMaxWidth().padding(14.dp),
-                        verticalArrangement = Arrangement.spacedBy(5.dp)
+                        verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
-                        Text(contact.name, style = MaterialTheme.typography.titleMedium)
-                        Text(contact.destination, style = MaterialTheme.typography.bodySmall)
-                        Text(
-                            if (contact.verified) "Key/address binding checked · display name self-reported" else "Unverified · address saved locally",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                        TextButton(onClick = { onStartConversation(contact.id) }) {
-                            Text("Start conversation")
+                        Surface(
+                            shape = androidx.compose.foundation.shape.CircleShape,
+                            color = MaterialTheme.colorScheme.secondaryContainer
+                        ) {
+                            Text(
+                                contact.name.firstOrNull()?.uppercase() ?: "•",
+                                modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+                                style = MaterialTheme.typography.titleMedium
+                            )
                         }
+                        Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                            Text(contact.name, style = MaterialTheme.typography.titleMedium)
+                            Text(
+                                if (contact.verified) "Key and address match" else "Saved · not verified",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        TextButton(onClick = { onStartConversation(contact.id) }) { Text("Message") }
                     }
                 }
             }
@@ -878,111 +896,125 @@ private fun ChatScreen(
     var draft by remember(conversation.id) { mutableStateOf("") }
     val hasValidRecipient = conversation.recipientAddress
         ?.let { Regex("^[0-9a-f]{32}$").matches(it) } == true
+
     Column(
-        modifier = Modifier.fillMaxSize().imePadding().padding(horizontal = 16.dp, vertical = 10.dp),
-        verticalArrangement = Arrangement.spacedBy(10.dp)
+        modifier = Modifier.fillMaxSize().imePadding(),
+        verticalArrangement = Arrangement.spacedBy(0.dp)
     ) {
-        Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
-            TextButton(onClick = onBack) { Text("‹ Back") }
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp),
+            verticalAlignment = androidx.compose.ui.Alignment.CenterVertically
+        ) {
+            TextButton(onClick = onBack) { Text("‹") }
             Column(modifier = Modifier.weight(1f).padding(start = 4.dp)) {
                 Text(conversation.title, style = MaterialTheme.typography.titleLarge, maxLines = 1)
                 Text(
-                    conversation.recipientAddress?.let {
-                        if (conversation.recipientVerified) "Verified LXMF contact" else "LXMF destination · not verified"
-                    } ?: "Private local conversation",
+                    if (conversation.recipientVerified) "Contact key checked"
+                    else if (hasValidRecipient) "Saved contact"
+                    else "Private notes · only on this device",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
         }
+        androidx.compose.material3.HorizontalDivider()
         LazyColumn(
             modifier = Modifier.weight(1f).fillMaxWidth(),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
+            contentPadding = androidx.compose.foundation.layout.PaddingValues(16.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
             if (messages.isEmpty()) {
                 item {
-                    Card(modifier = Modifier.fillMaxWidth()) {
+                    Column(
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 32.dp),
+                        horizontalAlignment = androidx.compose.ui.Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Text("Say hello", style = MaterialTheme.typography.headlineSmall)
                         Text(
-                            if (hasValidRecipient)
-                                "No messages yet. Write a message to queue it locally for this saved recipient."
-                            else
-                                "Private notes stay on this device. They are not sent to anyone.",
-                            modifier = Modifier.padding(16.dp),
-                            style = MaterialTheme.typography.bodyMedium
+                            if (hasValidRecipient) "Your messages are kept safely while the network finds a path."
+                            else "These notes never leave this device.",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
                 }
             } else {
                 items(messages, key = { it.id }) { message ->
-                    Card(modifier = Modifier.fillMaxWidth()) {
-                        Column(
-                            modifier = Modifier.fillMaxWidth().padding(12.dp),
-                            verticalArrangement = Arrangement.spacedBy(5.dp)
-                        ) {
-                            Text(message.text, style = MaterialTheme.typography.bodyLarge)
-                            Text(
-                                "${DateFormat.getTimeInstance(DateFormat.SHORT).format(Date(message.createdAt))} · ${when (message.status) {
-                                    "LOCAL_ONLY" -> "saved locally · not sent"
-                                    "QUEUED" -> "queued securely"
-                                    "WAITING_FOR_ROUTE" -> "waiting for route"
-                                    "WAITING_FOR_IDENTITY" -> "discovering recipient"
-                                    "SUBMITTING" -> "submitting to LXMF · do not resend"
-                                    "SUBMITTED" -> "submitted to LXMF"
-                                    "DELIVERY_UNKNOWN" -> "delivery status unknown · not resent"
-                                    "SENT" -> "sent · awaiting delivery proof"
-                                    "DELIVERED" -> "delivered"
-                                    "FAILED" -> "failed · retained locally"
-                                    "REJECTED" -> "rejected"
-                                    "RECEIVED" -> "received"
-                                    "REQUEST" -> "message request"
-                                    else -> message.status.lowercase()
-                                }}",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                    val incoming = message.status == "RECEIVED" || message.status == "REQUEST"
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = if (incoming) Arrangement.Start else Arrangement.End
+                    ) {
+                        Card(
+                            modifier = Modifier.fillMaxWidth(0.88f),
+                            shape = androidx.compose.foundation.shape.RoundedCornerShape(
+                                topStart = 18.dp, topEnd = 18.dp,
+                                bottomEnd = if (incoming) 18.dp else 5.dp,
+                                bottomStart = if (incoming) 5.dp else 18.dp
+                            ),
+                            colors = androidx.compose.material3.CardDefaults.cardColors(
+                                containerColor = if (incoming)
+                                    MaterialTheme.colorScheme.surfaceVariant
+                                else MaterialTheme.colorScheme.primaryContainer
                             )
+                        ) {
+                            Column(
+                                modifier = Modifier.padding(horizontal = 14.dp, vertical = 11.dp),
+                                verticalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                Text(message.text, style = MaterialTheme.typography.bodyLarge)
+                                val status = when (message.status) {
+                                    "LOCAL_ONLY" -> "On this device"
+                                    "QUEUED", "WAITING_FOR_ROUTE", "WAITING_FOR_IDENTITY" -> "Waiting for connection"
+                                    "SUBMITTING" -> "Sending"
+                                    "SUBMITTED" -> "Sent to network"
+                                    "DELIVERY_UNKNOWN" -> "Delivery status unknown"
+                                    "SENT" -> "Sent · awaiting delivery"
+                                    "DELIVERED" -> "Delivered"
+                                    "FAILED", "REJECTED" -> "Not sent · kept on this device"
+                                    "RECEIVED" -> "Received"
+                                    "REQUEST" -> "Message request"
+                                    else -> message.status.lowercase().replace('_', ' ')
+                                }
+                                Text(
+                                    "${DateFormat.getTimeInstance(DateFormat.SHORT).format(Date(message.createdAt))}  ·  $status",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
                         }
                     }
                 }
             }
         }
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalAlignment = androidx.compose.ui.Alignment.Bottom
+        androidx.compose.material3.Surface(
+            tonalElevation = 2.dp,
+            modifier = Modifier.fillMaxWidth()
         ) {
-            OutlinedTextField(
-                value = draft,
-                onValueChange = { draft = it },
-                modifier = Modifier.weight(1f),
-                label = { Text("Message") },
-                placeholder = { Text("Write a message") },
-                maxLines = 4
-            )
-            Button(
-                onClick = {
-                    val text = draft.trim()
-                    if (text.isNotEmpty()) {
-                        onSend(text)
-                        draft = ""
-                    }
-                },
-                enabled = draft.isNotBlank()
-            ) { Text(if (hasValidRecipient) "Send" else "Save note") }
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = androidx.compose.ui.Alignment.Bottom
+            ) {
+                OutlinedTextField(
+                    value = draft,
+                    onValueChange = { draft = it },
+                    modifier = Modifier.weight(1f),
+                    placeholder = { Text(if (hasValidRecipient) "Write a message…" else "Write a private note…") },
+                    maxLines = 4
+                )
+                Button(
+                    onClick = {
+                        val text = draft.trim()
+                        if (text.isNotEmpty()) {
+                            onSend(text)
+                            draft = ""
+                        }
+                    },
+                    enabled = draft.isNotBlank()
+                ) { Text(if (hasValidRecipient) "Send" else "Save") }
+            }
         }
-        if (!hasValidRecipient) {
-            Text(
-                "Private local thread · notes are saved only on this device and are never sent.",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-        }
-        Text(
-            if (!hasValidRecipient)
-                "Local only · not sent"
-            else
-                "Queued locally · Destination saved, not yet sent",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
     }
 }
