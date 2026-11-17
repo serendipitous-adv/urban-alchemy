@@ -282,6 +282,9 @@ class MainActivity : ComponentActivity() {
                                                     runtimeInfo.getString("reticulum_public_key"),
                                                     runtimeInfo.getString("destination")
                                                 )
+                                                // Sharing an invite is the user's explicit signal to make
+                                                // this LXMF destination discoverable to the recipient.
+                                                module.callAttr("announce")
                                                 module.callAttr(
                                                     "create_contact_invite",
                                                     "Urban Alchemy",
@@ -295,7 +298,7 @@ class MainActivity : ComponentActivity() {
                                                 putExtra(Intent.EXTRA_TEXT, invite)
                                             }
                                             startActivity(Intent.createChooser(sendIntent, "Share your Urban Alchemy contact invite"))
-                                            transportStatus = "Your public LXMF contact invite is ready to share."
+                                            transportStatus = "Your LXMF address was announced and the public contact invite is ready to share."
                                         } catch (error: Exception) {
                                             transportStatus = "Could not create invite: ${error.message ?: error.javaClass.simpleName}"
                                         }
