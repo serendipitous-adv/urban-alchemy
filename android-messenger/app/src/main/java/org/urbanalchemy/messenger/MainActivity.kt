@@ -493,7 +493,9 @@ private fun MessengerHome(
     onContacts: () -> Unit
 ) {
     var showSettings by remember { mutableStateOf(false) }
-    val messageThreads = conversations.filter { it.recipientAddress != null }
+    val messageThreads = conversations.filter {
+        it.recipientAddress != null || it.title.startsWith("Message request ·")
+    }
 
     PullToRefreshBox(
         isRefreshing = isRefreshing,
