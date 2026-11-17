@@ -724,7 +724,7 @@ private fun ContactsScreen(
                 ) {
                     Text("Add from invite", style = MaterialTheme.typography.titleMedium)
                     Text(
-                        "Paste the contact invite someone shared with you. The public key and LXMF address are checked before saving.",
+                        "Choose Urban Alchemy Messenger from another app's Share menu to open an invite here automatically, or paste one below. The public key and LXMF address are checked before saving.",
                         style = MaterialTheme.typography.bodySmall
                     )
                     OutlinedTextField(
