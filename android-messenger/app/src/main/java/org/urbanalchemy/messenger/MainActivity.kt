@@ -916,9 +916,6 @@ private fun ContactsScreen(
                 }
             }
         }
-        // Start receiving on cold launch; users should not need to send,
-        // share an invite, or open Settings to activate the messenger.
-        startLxmfSync(store)
     }
 }
 
