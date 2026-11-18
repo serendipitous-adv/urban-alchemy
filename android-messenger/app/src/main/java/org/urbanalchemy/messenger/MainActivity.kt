@@ -12,6 +12,7 @@ import com.chaquo.python.android.AndroidPlatform
 import com.chaquo.python.Python
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.activity.compose.BackHandler
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.repeatOnLifecycle
@@ -32,6 +33,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -251,6 +253,10 @@ class MainActivity : ComponentActivity() {
             var lxmfAddress by remember { mutableStateOf<String?>(null) }
             var transportStarted by remember { mutableStateOf(false) }
             var isRefreshing by remember { mutableStateOf(false) }
+            BackHandler(enabled = selectedId != null || showContacts) {
+                if (selectedId != null) selectedId = null else showContacts = false
+            }
+
             LaunchedEffect(sharedInvite) {
                 if (sharedInvite != null) {
                     selectedId = null
@@ -299,7 +305,9 @@ class MainActivity : ComponentActivity() {
                                         try {
                                             syncLxmf(store)
                                             startLxmfSync(store)
-                                            messages = store.listMessages(selected.id)
+                                            if (selectedId == selected.id) {
+                                                messages = store.listMessages(selected.id)
+                                            }
                                             conversations = store.listConversations()
                                             transportStatus = "LXMF outbox checked. Delivery status reflects transport callbacks."
                                         } catch (error: Exception) {
@@ -950,6 +958,10 @@ private fun ChatScreen(
     onSend: (String) -> Unit
 ) {
     var draft by remember(conversation.id) { mutableStateOf("") }
+    val messageListState = rememberLazyListState()
+    LaunchedEffect(messages.size) {
+        if (messages.isNotEmpty()) messageListState.animateScrollToItem(messages.lastIndex)
+    }
     val hasValidRecipient = conversation.recipientAddress
         ?.let { Regex("^[0-9a-f]{32}$").matches(it) } == true
 
@@ -975,6 +987,7 @@ private fun ChatScreen(
         }
         androidx.compose.material3.HorizontalDivider()
         LazyColumn(
+            state = messageListState,
             modifier = Modifier.weight(1f).fillMaxWidth(),
             contentPadding = androidx.compose.foundation.layout.PaddingValues(16.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp)
