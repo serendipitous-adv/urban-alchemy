@@ -258,6 +258,29 @@ class MainActivity : ComponentActivity() {
                 }
             }
 
+            // SQLite remains the durable source of truth. Refresh snapshots off
+            // the main thread so inbound messages and delivery callbacks appear
+            // without a manual refresh or a send action.
+            // Keying by selectedId cancels an old chat's refresh before it can
+            // overwrite the message list for a newly selected conversation.
+            LaunchedEffect(selectedId) {
+                while (isActive) {
+                    if (lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)) {
+                        val snapshot = withContext(Dispatchers.IO) {
+                            Triple(
+                                store.listConversations(),
+                                store.listContacts(),
+                                selectedId?.let { store.listMessages(it) } ?: emptyList()
+                            )
+                        }
+                        conversations = snapshot.first
+                        contacts = snapshot.second
+                        messages = snapshot.third
+                    }
+                    delay(1_000)
+                }
+            }
+
             MaterialTheme {
                 Surface(modifier = Modifier.fillMaxSize()) {
                     val selected = conversations.firstOrNull { it.id == selectedId }
