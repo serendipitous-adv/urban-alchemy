@@ -12,13 +12,18 @@ import com.chaquo.python.android.AndroidPlatform
 import com.chaquo.python.Python
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.activity.compose.BackHandler
 import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.repeatOnLifecycle
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -28,6 +33,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -65,22 +71,32 @@ class MainActivity : ComponentActivity() {
 
 
     private var lxmfSyncJob: Job? = null
+    private val lxmfSyncMutex = Mutex()
 
+    /**
+     * Keep receive processing active while the Activity is visible. Android may
+     * stop this loop when the app leaves the foreground; durable background
+     * reception is a separate service/notification design decision.
+     */
     private fun startLxmfSync(store: LocalStore) {
         if (lxmfSyncJob?.isActive == true) return
         lxmfSyncJob = lifecycleScope.launch {
-            while (isActive) {
-                try {
-                    syncLxmf(store)
-                } catch (_: Exception) {
-                    // Keep the encrypted outbox intact and retry on the next cycle.
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
+                while (isActive) {
+                    try {
+                        syncLxmf(store)
+                    } catch (_: Exception) {
+                        // Keep the encrypted outbox intact and retry on the next cycle.
+                    }
+                    delay(5_000)
                 }
-                delay(5_000)
             }
         }
     }
 
-    private suspend fun syncLxmf(store: LocalStore): Int = withContext(Dispatchers.IO) {
+    /** Serialize bridge access when sends/connect actions overlap the receive loop. */
+    private suspend fun syncLxmf(store: LocalStore): Int = lxmfSyncMutex.withLock {
+        withContext(Dispatchers.IO) {
         if (!Python.isStarted()) Python.start(AndroidPlatform(applicationContext))
         val module = Python.getInstance().getModule("transport_probe")
         val runtime = JSONObject(
@@ -177,6 +193,23 @@ class MainActivity : ComponentActivity() {
             module.callAttr("ack_events", events.length())
         }
         processed
+        }
+    }
+
+    override fun onStart() {
+        super.onStart()
+        try {
+            acquireReticulumMulticastLock()
+        } catch (_: Exception) {
+            // Runtime startup reports transport errors; never crash the UI here.
+        }
+    }
+
+    override fun onStop() {
+        try {
+            reticulumMulticastLock?.let { if (it.isHeld) it.release() }
+        } catch (_: Exception) { }
+        super.onStop()
     }
 
     override fun onNewIntent(intent: Intent) {
@@ -201,17 +234,11 @@ class MainActivity : ComponentActivity() {
             intent.getStringExtra(Intent.EXTRA_TEXT)?.takeIf { it.isNotBlank() }
         } else null
         val store = LocalStore(this)
-        synchronized(MainActivity::class.java) {
-            if (!processRecoveryCompleted) {
-                store.markInFlightDeliveryUnknown()
-                processRecoveryCompleted = true
-            }
-        }
         val identity = DeviceIdentity.getOrCreate()
-        val uaIdentity = store.getOrCreateUaIdentity()
         setContent {
-            var conversations by remember { mutableStateOf(store.listConversations()) }
-            var contacts by remember { mutableStateOf(store.listContacts()) }
+            var uaIdentity by remember { mutableStateOf<UaLocalIdentity?>(null) }
+            var conversations by remember { mutableStateOf(emptyList<Conversation>()) }
+            var contacts by remember { mutableStateOf(emptyList<Contact>()) }
             var selectedId by remember { mutableStateOf<Long?>(null) }
             var messages by remember { mutableStateOf(emptyList<LocalMessage>()) }
             var showContacts by remember { mutableStateOf(sharedInvite != null) }
@@ -220,6 +247,32 @@ class MainActivity : ComponentActivity() {
             var lxmfAddress by remember { mutableStateOf<String?>(null) }
             var transportStarted by remember { mutableStateOf(false) }
             var isRefreshing by remember { mutableStateOf(false) }
+            BackHandler(enabled = selectedId != null || showContacts) {
+                if (selectedId != null) selectedId = null else showContacts = false
+            }
+
+            LaunchedEffect(Unit) {
+                // Recover delivery state and load the persistent identity before
+                // starting transport. All database work stays off the UI thread.
+                val initial = withContext(Dispatchers.IO) {
+                    synchronized(MainActivity::class.java) {
+                        if (!processRecoveryCompleted) {
+                            store.markInFlightDeliveryUnknown()
+                            processRecoveryCompleted = true
+                        }
+                    }
+                    Triple(
+                        store.getOrCreateUaIdentity(),
+                        store.listConversations(),
+                        store.listContacts()
+                    )
+                }
+                uaIdentity = initial.first
+                conversations = initial.second
+                contacts = initial.third
+                startLxmfSync(store)
+            }
+
             LaunchedEffect(sharedInvite) {
                 if (sharedInvite != null) {
                     selectedId = null
@@ -227,35 +280,71 @@ class MainActivity : ComponentActivity() {
                 }
             }
 
+            // SQLite remains the durable source of truth. Refresh snapshots off
+            // the main thread so inbound messages and delivery callbacks appear
+            // without a manual refresh or a send action.
+            // Keying by selectedId cancels an old chat's refresh before it can
+            // overwrite the message list for a newly selected conversation.
+            LaunchedEffect(selectedId) {
+                while (isActive) {
+                    if (lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)) {
+                        val snapshot = withContext(Dispatchers.IO) {
+                            Triple(
+                                store.listConversations(),
+                                store.listContacts(),
+                                selectedId?.let { store.listMessages(it) } ?: emptyList()
+                            )
+                        }
+                        conversations = snapshot.first
+                        contacts = snapshot.second
+                        messages = snapshot.third
+                    }
+                    delay(1_000)
+                }
+            }
+
             MaterialTheme {
                 Surface(modifier = Modifier.fillMaxSize()) {
                     val selected = conversations.firstOrNull { it.id == selectedId }
                     when {
+                        uaIdentity == null -> Text("Starting Urban Alchemy…")
                         selected != null -> ChatScreen(
                             conversation = selected,
                             messages = messages,
                             onBack = { selectedId = null },
                             onSend = { text ->
                                 if (selected.recipientAddress?.let { Regex("^[0-9a-f]{32}$").matches(it) } == true) {
-                                    store.addQueuedMessage(selected.id, text)
-                                    messages = store.listMessages(selected.id)
-                                    conversations = store.listConversations()
-                                    transportStatus = "Message saved to the encrypted outbox. Submitting through LXMF..."
+                                    transportStatus = "Saving message to the encrypted outbox..."
                                     lifecycleScope.launch {
                                         try {
+                                            withContext(Dispatchers.IO) { store.addQueuedMessage(selected.id, text) }
+                                            val snapshot = withContext(Dispatchers.IO) {
+                                                store.listMessages(selected.id) to store.listConversations()
+                                            }
+                                            if (selectedId == selected.id) messages = snapshot.first
+                                            conversations = snapshot.second
+                                            transportStatus = "Message saved. Submitting through LXMF..."
                                             syncLxmf(store)
                                             startLxmfSync(store)
-                                            messages = store.listMessages(selected.id)
-                                            conversations = store.listConversations()
+                                            val refreshed = withContext(Dispatchers.IO) {
+                                                store.listMessages(selected.id) to store.listConversations()
+                                            }
+                                            if (selectedId == selected.id) messages = refreshed.first
+                                            conversations = refreshed.second
                                             transportStatus = "LXMF outbox checked. Delivery status reflects transport callbacks."
                                         } catch (error: Exception) {
                                             transportStatus = "Message remains safely queued: ${error.message ?: error.javaClass.simpleName}"
                                         }
                                     }
                                 } else {
-                                    store.addLocalMessage(selected.id, text)
-                                    messages = store.listMessages(selected.id)
-                                    conversations = store.listConversations()
+                                    lifecycleScope.launch {
+                                        val snapshot = withContext(Dispatchers.IO) {
+                                            store.addLocalMessage(selected.id, text)
+                                            store.listMessages(selected.id) to store.listConversations()
+                                        }
+                                        if (selectedId == selected.id) messages = snapshot.first
+                                        conversations = snapshot.second
+                                    }
                                 }
                             }
                         )
@@ -324,32 +413,46 @@ class MainActivity : ComponentActivity() {
                                 }
                             },
                             onSaveVerifiedInvite = { inviteJson ->
-                                val invite = JSONObject(inviteJson)
-                                store.addVerifiedContact(
-                                    invite.getString("display_name"),
-                                    invite.getString("lxmf_destination"),
-                                    invite.getString("reticulum_identity_hash"),
-                                    invite.getString("reticulum_public_key"),
-                                    invite.optString("player_id").takeIf { it.isNotBlank() && it != "null" }
-                                )
-                                contacts = store.listContacts()
+                                lifecycleScope.launch {
+                                    val updatedContacts = withContext(Dispatchers.IO) {
+                                        val invite = JSONObject(inviteJson)
+                                        store.addVerifiedContact(
+                                            invite.getString("display_name"),
+                                            invite.getString("lxmf_destination"),
+                                            invite.getString("reticulum_identity_hash"),
+                                            invite.getString("reticulum_public_key"),
+                                            invite.optString("player_id").takeIf { it.isNotBlank() && it != "null" }
+                                        )
+                                        store.listContacts()
+                                    }
+                                    contacts = updatedContacts
+                                }
                             },
                             onAddContact = { name, address ->
-                                store.addContact(name, address)
-                                contacts = store.listContacts()
+                                lifecycleScope.launch {
+                                    contacts = withContext(Dispatchers.IO) {
+                                        store.addContact(name, address)
+                                        store.listContacts()
+                                    }
+                                }
                             },
                             onStartConversation = { contactId ->
-                                val id = store.createConversationForContact(contactId)
-                                conversations = store.listConversations()
-                                messages = store.listMessages(id)
-                                selectedId = id
-                                showContacts = false
+                                lifecycleScope.launch {
+                                    val snapshot = withContext(Dispatchers.IO) {
+                                        val id = store.createConversationForContact(contactId)
+                                        Triple(id, store.listConversations(), store.listMessages(id))
+                                    }
+                                    conversations = snapshot.second
+                                    messages = snapshot.third
+                                    selectedId = snapshot.first
+                                    showContacts = false
+                                }
                             }
                         )
                         else -> MessengerHome(
                             fingerprint = identity.fingerprint,
-                            playerId = uaIdentity.playerId,
-                            nodeId = uaIdentity.nodeId,
+                            playerId = uaIdentity!!.playerId,
+                            nodeId = uaIdentity!!.nodeId,
                             isRefreshing = isRefreshing,
                             onRefresh = {
                                 isRefreshing = true
@@ -411,17 +514,19 @@ class MainActivity : ComponentActivity() {
                                             }
                                             val info = JSONObject(result)
                                             val destination = info.getString("destination")
-                                            store.bindReticulumIdentity(
-                                                info.getString("reticulum_identity_hash"),
-                                                info.getString("reticulum_public_key"),
-                                                destination
-                                            )
+                                            withContext(Dispatchers.IO) {
+                                                store.bindReticulumIdentity(
+                                                    info.getString("reticulum_identity_hash"),
+                                                    info.getString("reticulum_public_key"),
+                                                    destination
+                                                )
+                                            }
                                             lxmfAddress = destination
                                             transportStarted = true
                                             transportStatus = "Reticulum started. Checking the durable LXMF outbox..."
                                             syncLxmf(store)
                                             startLxmfSync(store)
-                                            conversations = store.listConversations()
+                                            conversations = withContext(Dispatchers.IO) { store.listConversations() }
                                             transportStatus = "Reticulum is running. Outbox submitted where routes were available; waiting messages remain queued."
                                         } catch (error: Exception) {
                                             transportStatus = "FAILED: ${error.javaClass.simpleName}: ${error.message}"
@@ -454,12 +559,19 @@ class MainActivity : ComponentActivity() {
                                 }
                             },
                             onOpen = { id ->
-                                selectedId = id
-                                messages = store.listMessages(id)
+                                lifecycleScope.launch {
+                                    val loaded = withContext(Dispatchers.IO) { store.listMessages(id) }
+                                    selectedId = id
+                                    messages = loaded
+                                }
                             },
                             onCreateConversation = { title ->
-                                store.createConversation(title)
-                                conversations = store.listConversations()
+                                lifecycleScope.launch {
+                                    conversations = withContext(Dispatchers.IO) {
+                                        store.createConversation(title)
+                                        store.listConversations()
+                                    }
+                                }
                             },
                             onContacts = { showContacts = true }
                         )
@@ -894,6 +1006,10 @@ private fun ChatScreen(
     onSend: (String) -> Unit
 ) {
     var draft by remember(conversation.id) { mutableStateOf("") }
+    val messageListState = rememberLazyListState()
+    LaunchedEffect(messages.size) {
+        if (messages.isNotEmpty()) messageListState.animateScrollToItem(messages.lastIndex)
+    }
     val hasValidRecipient = conversation.recipientAddress
         ?.let { Regex("^[0-9a-f]{32}$").matches(it) } == true
 
@@ -919,6 +1035,7 @@ private fun ChatScreen(
         }
         androidx.compose.material3.HorizontalDivider()
         LazyColumn(
+            state = messageListState,
             modifier = Modifier.weight(1f).fillMaxWidth(),
             contentPadding = androidx.compose.foundation.layout.PaddingValues(16.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp)
