@@ -234,17 +234,11 @@ class MainActivity : ComponentActivity() {
             intent.getStringExtra(Intent.EXTRA_TEXT)?.takeIf { it.isNotBlank() }
         } else null
         val store = LocalStore(this)
-        synchronized(MainActivity::class.java) {
-            if (!processRecoveryCompleted) {
-                store.markInFlightDeliveryUnknown()
-                processRecoveryCompleted = true
-            }
-        }
         val identity = DeviceIdentity.getOrCreate()
-        val uaIdentity = store.getOrCreateUaIdentity()
         setContent {
-            var conversations by remember { mutableStateOf(store.listConversations()) }
-            var contacts by remember { mutableStateOf(store.listContacts()) }
+            var uaIdentity by remember { mutableStateOf<UaLocalIdentity?>(null) }
+            var conversations by remember { mutableStateOf(emptyList<Conversation>()) }
+            var contacts by remember { mutableStateOf(emptyList<Contact>()) }
             var selectedId by remember { mutableStateOf<Long?>(null) }
             var messages by remember { mutableStateOf(emptyList<LocalMessage>()) }
             var showContacts by remember { mutableStateOf(sharedInvite != null) }
@@ -255,6 +249,28 @@ class MainActivity : ComponentActivity() {
             var isRefreshing by remember { mutableStateOf(false) }
             BackHandler(enabled = selectedId != null || showContacts) {
                 if (selectedId != null) selectedId = null else showContacts = false
+            }
+
+            LaunchedEffect(Unit) {
+                // Recover delivery state and load the persistent identity before
+                // starting transport. All database work stays off the UI thread.
+                val initial = withContext(Dispatchers.IO) {
+                    synchronized(MainActivity::class.java) {
+                        if (!processRecoveryCompleted) {
+                            store.markInFlightDeliveryUnknown()
+                            processRecoveryCompleted = true
+                        }
+                    }
+                    Triple(
+                        store.getOrCreateUaIdentity(),
+                        store.listConversations(),
+                        store.listContacts()
+                    )
+                }
+                uaIdentity = initial.first
+                conversations = initial.second
+                contacts = initial.third
+                startLxmfSync(store)
             }
 
             LaunchedEffect(sharedInvite) {
@@ -291,6 +307,7 @@ class MainActivity : ComponentActivity() {
                 Surface(modifier = Modifier.fillMaxSize()) {
                     val selected = conversations.firstOrNull { it.id == selectedId }
                     when {
+                        uaIdentity == null -> Text("Starting Urban Alchemy…")
                         selected != null -> ChatScreen(
                             conversation = selected,
                             messages = messages,
@@ -410,8 +427,8 @@ class MainActivity : ComponentActivity() {
                         )
                         else -> MessengerHome(
                             fingerprint = identity.fingerprint,
-                            playerId = uaIdentity.playerId,
-                            nodeId = uaIdentity.nodeId,
+                            playerId = uaIdentity!!.playerId,
+                            nodeId = uaIdentity!!.nodeId,
                             isRefreshing = isRefreshing,
                             onRefresh = {
                                 isRefreshing = true
@@ -529,8 +546,6 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
-        // Cold launch starts receiving without requiring Send, Share invite, or Settings.
-        startLxmfSync(store)
     }
 }
 
