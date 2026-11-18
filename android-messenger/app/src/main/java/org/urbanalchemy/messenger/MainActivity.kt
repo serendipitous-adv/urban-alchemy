@@ -498,6 +498,8 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
+        // Cold launch starts receiving without requiring Send, Share invite, or Settings.
+        startLxmfSync(store)
     }
 }
 
