@@ -13,12 +13,16 @@ import com.chaquo.python.Python
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.repeatOnLifecycle
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -65,22 +69,32 @@ class MainActivity : ComponentActivity() {
 
 
     private var lxmfSyncJob: Job? = null
+    private val lxmfSyncMutex = Mutex()
 
+    /**
+     * Keep receive processing active while the Activity is visible. Android may
+     * stop this loop when the app leaves the foreground; durable background
+     * reception is a separate service/notification design decision.
+     */
     private fun startLxmfSync(store: LocalStore) {
         if (lxmfSyncJob?.isActive == true) return
         lxmfSyncJob = lifecycleScope.launch {
-            while (isActive) {
-                try {
-                    syncLxmf(store)
-                } catch (_: Exception) {
-                    // Keep the encrypted outbox intact and retry on the next cycle.
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
+                while (isActive) {
+                    try {
+                        syncLxmf(store)
+                    } catch (_: Exception) {
+                        // Keep the encrypted outbox intact and retry on the next cycle.
+                    }
+                    delay(5_000)
                 }
-                delay(5_000)
             }
         }
     }
 
-    private suspend fun syncLxmf(store: LocalStore): Int = withContext(Dispatchers.IO) {
+    /** Serialize bridge access when sends/connect actions overlap the receive loop. */
+    private suspend fun syncLxmf(store: LocalStore): Int = lxmfSyncMutex.withLock {
+        withContext(Dispatchers.IO) {
         if (!Python.isStarted()) Python.start(AndroidPlatform(applicationContext))
         val module = Python.getInstance().getModule("transport_probe")
         val runtime = JSONObject(
@@ -177,6 +191,23 @@ class MainActivity : ComponentActivity() {
             module.callAttr("ack_events", events.length())
         }
         processed
+        }
+    }
+
+    override fun onStart() {
+        super.onStart()
+        try {
+            acquireReticulumMulticastLock()
+        } catch (_: Exception) {
+            // Runtime startup reports transport errors; never crash the UI here.
+        }
+    }
+
+    override fun onStop() {
+        try {
+            reticulumMulticastLock?.let { if (it.isHeld) it.release() }
+        } catch (_: Exception) { }
+        super.onStop()
     }
 
     override fun onNewIntent(intent: Intent) {
@@ -883,6 +914,9 @@ private fun ContactsScreen(
                 }
             }
         }
+        // Start receiving on cold launch; users should not need to send,
+        // share an invite, or open Settings to activate the messenger.
+        startLxmfSync(store)
     }
 }
 
