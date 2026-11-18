@@ -314,27 +314,37 @@ class MainActivity : ComponentActivity() {
                             onBack = { selectedId = null },
                             onSend = { text ->
                                 if (selected.recipientAddress?.let { Regex("^[0-9a-f]{32}$").matches(it) } == true) {
-                                    store.addQueuedMessage(selected.id, text)
-                                    messages = store.listMessages(selected.id)
-                                    conversations = store.listConversations()
-                                    transportStatus = "Message saved to the encrypted outbox. Submitting through LXMF..."
+                                    transportStatus = "Saving message to the encrypted outbox..."
                                     lifecycleScope.launch {
                                         try {
+                                            withContext(Dispatchers.IO) { store.addQueuedMessage(selected.id, text) }
+                                            val snapshot = withContext(Dispatchers.IO) {
+                                                store.listMessages(selected.id) to store.listConversations()
+                                            }
+                                            if (selectedId == selected.id) messages = snapshot.first
+                                            conversations = snapshot.second
+                                            transportStatus = "Message saved. Submitting through LXMF..."
                                             syncLxmf(store)
                                             startLxmfSync(store)
-                                            if (selectedId == selected.id) {
-                                                messages = store.listMessages(selected.id)
+                                            val refreshed = withContext(Dispatchers.IO) {
+                                                store.listMessages(selected.id) to store.listConversations()
                                             }
-                                            conversations = store.listConversations()
+                                            if (selectedId == selected.id) messages = refreshed.first
+                                            conversations = refreshed.second
                                             transportStatus = "LXMF outbox checked. Delivery status reflects transport callbacks."
                                         } catch (error: Exception) {
                                             transportStatus = "Message remains safely queued: ${error.message ?: error.javaClass.simpleName}"
                                         }
                                     }
                                 } else {
-                                    store.addLocalMessage(selected.id, text)
-                                    messages = store.listMessages(selected.id)
-                                    conversations = store.listConversations()
+                                    lifecycleScope.launch {
+                                        val snapshot = withContext(Dispatchers.IO) {
+                                            store.addLocalMessage(selected.id, text)
+                                            store.listMessages(selected.id) to store.listConversations()
+                                        }
+                                        if (selectedId == selected.id) messages = snapshot.first
+                                        conversations = snapshot.second
+                                    }
                                 }
                             }
                         )
@@ -403,26 +413,40 @@ class MainActivity : ComponentActivity() {
                                 }
                             },
                             onSaveVerifiedInvite = { inviteJson ->
-                                val invite = JSONObject(inviteJson)
-                                store.addVerifiedContact(
-                                    invite.getString("display_name"),
-                                    invite.getString("lxmf_destination"),
-                                    invite.getString("reticulum_identity_hash"),
-                                    invite.getString("reticulum_public_key"),
-                                    invite.optString("player_id").takeIf { it.isNotBlank() && it != "null" }
-                                )
-                                contacts = store.listContacts()
+                                lifecycleScope.launch {
+                                    val updatedContacts = withContext(Dispatchers.IO) {
+                                        val invite = JSONObject(inviteJson)
+                                        store.addVerifiedContact(
+                                            invite.getString("display_name"),
+                                            invite.getString("lxmf_destination"),
+                                            invite.getString("reticulum_identity_hash"),
+                                            invite.getString("reticulum_public_key"),
+                                            invite.optString("player_id").takeIf { it.isNotBlank() && it != "null" }
+                                        )
+                                        store.listContacts()
+                                    }
+                                    contacts = updatedContacts
+                                }
                             },
                             onAddContact = { name, address ->
-                                store.addContact(name, address)
-                                contacts = store.listContacts()
+                                lifecycleScope.launch {
+                                    contacts = withContext(Dispatchers.IO) {
+                                        store.addContact(name, address)
+                                        store.listContacts()
+                                    }
+                                }
                             },
                             onStartConversation = { contactId ->
-                                val id = store.createConversationForContact(contactId)
-                                conversations = store.listConversations()
-                                messages = store.listMessages(id)
-                                selectedId = id
-                                showContacts = false
+                                lifecycleScope.launch {
+                                    val snapshot = withContext(Dispatchers.IO) {
+                                        val id = store.createConversationForContact(contactId)
+                                        Triple(id, store.listConversations(), store.listMessages(id))
+                                    }
+                                    conversations = snapshot.second
+                                    messages = snapshot.third
+                                    selectedId = snapshot.first
+                                    showContacts = false
+                                }
                             }
                         )
                         else -> MessengerHome(
@@ -490,17 +514,19 @@ class MainActivity : ComponentActivity() {
                                             }
                                             val info = JSONObject(result)
                                             val destination = info.getString("destination")
-                                            store.bindReticulumIdentity(
-                                                info.getString("reticulum_identity_hash"),
-                                                info.getString("reticulum_public_key"),
-                                                destination
-                                            )
+                                            withContext(Dispatchers.IO) {
+                                                store.bindReticulumIdentity(
+                                                    info.getString("reticulum_identity_hash"),
+                                                    info.getString("reticulum_public_key"),
+                                                    destination
+                                                )
+                                            }
                                             lxmfAddress = destination
                                             transportStarted = true
                                             transportStatus = "Reticulum started. Checking the durable LXMF outbox..."
                                             syncLxmf(store)
                                             startLxmfSync(store)
-                                            conversations = store.listConversations()
+                                            conversations = withContext(Dispatchers.IO) { store.listConversations() }
                                             transportStatus = "Reticulum is running. Outbox submitted where routes were available; waiting messages remain queued."
                                         } catch (error: Exception) {
                                             transportStatus = "FAILED: ${error.javaClass.simpleName}: ${error.message}"
@@ -533,12 +559,19 @@ class MainActivity : ComponentActivity() {
                                 }
                             },
                             onOpen = { id ->
-                                selectedId = id
-                                messages = store.listMessages(id)
+                                lifecycleScope.launch {
+                                    val loaded = withContext(Dispatchers.IO) { store.listMessages(id) }
+                                    selectedId = id
+                                    messages = loaded
+                                }
                             },
                             onCreateConversation = { title ->
-                                store.createConversation(title)
-                                conversations = store.listConversations()
+                                lifecycleScope.launch {
+                                    conversations = withContext(Dispatchers.IO) {
+                                        store.createConversation(title)
+                                        store.listConversations()
+                                    }
+                                }
                             },
                             onContacts = { showContacts = true }
                         )
